@@ -1,5 +1,5 @@
 # (c) Marçal Comajoan Cara 2022
-# For the FRAME Project.
+# For the CPUPC Project.
 # Licensed under the MIT License
 # (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
 
@@ -18,5 +18,8 @@ class NoSuffixBuilder(build_ext):
         return super().get_ext_filename(ext_name).replace(sysconfig.get_config_var("EXT_SUFFIX"), "") + ".pyd"
 
 
-setup(ext_modules=[Extension("tools.rect.rect_greedy", ["tools/rect/cpp_src/greedy_lib.cpp"])],
-      cmdclass={"build_ext": NoSuffixBuilder})
+
+setup(
+    ext_modules=[],
+    cmdclass={"build_ext": NoSuffixBuilder},
+)
