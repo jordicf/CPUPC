@@ -1,9 +1,9 @@
 # (c) Jordi Cortadella, 2025
-# For the FRAME Project.
+# For the CPUPC Project.
 # Licensed under the MIT License
-# (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
-"""FRAME command-line utility."""
+"""CPUPC command-line utility."""
 
 import argparse
 import importlib
@@ -13,15 +13,11 @@ import importlib
 # The main function of each module must be called "main" and must
 # accept two parameters: prog (str) and args (list[str]).
 
+PROJECT = "cpupc"
+
 TOOLS = {
     "hello": "tools.hello.hello",
     "draw": "tools.draw.draw",
-    "netgen": "tools.netgen.netgen",
-    "spectral": "tools.spectral.spectral",
-    "force": "tools.force.force",
-    "glbfloor": "tools.glbfloor.glbfloor",
-    "rect": "tools.rect.rect",
-    "legalfloor": "tools.legalfloor.legalfloor",
     "legalizer": "tools.legalrect.legalizer",
     "glb_legalizer": "tools.legalrect.glb_legalizer",
     "gp_area_legalizer": "tools.legalrect.gp_area_legalizer",
@@ -29,7 +25,6 @@ TOOLS = {
     "parse_floorset": "tools.floorset_parser.floorset_handler",
     "uscs_parser": "tools.uscs_parser.uscs_parser",
     "early_router": "tools.early_router.main_router",
-    "pswap": "tools.pswap.pswap",
     "grdraw": "tools.grdraw.grdraw",
     "attrrep": "tools.attrrep.attrrep",
     "fastpswap": "tools.fastpswap.fastpswap",
@@ -52,7 +47,7 @@ def main() -> None:
         if tool_name in TOOLS:
             try:
                 importlib.import_module(
-                    TOOLS[tool_name]).main(f"frame {tool_name}",tool_args)
+                    TOOLS[tool_name]).main(f"{PROJECT} {tool_name}",tool_args)
             except Exception as e:
                 import traceback
                 traceback.print_exc()
