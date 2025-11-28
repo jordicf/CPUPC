@@ -32,12 +32,11 @@ TOOLS = {
 
 def main() -> None:
     """Main function."""
-    parser = argparse.ArgumentParser(prog="frame")
+    parser = argparse.ArgumentParser(prog=f"{PROJECT}")
     parser.add_argument(
         "tool", choices=TOOLS.keys(), nargs=argparse.REMAINDER, help="tool to execute"
     )
     args = parser.parse_args()
-    
     if args.tool:
         tool_name, tool_args = args.tool[0], args.tool[1:]
         if tool_name in TOOLS:
@@ -49,7 +48,7 @@ def main() -> None:
                 traceback.print_exc()
                 print(f"Error ({tool_name}): {e}")
         else:
-            print("Unknown frame tool:", tool_name)
+            print(f"Unknown {PROJECT} tool: {tool_name}")
     else:
         parser.print_help()
 
