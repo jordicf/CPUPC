@@ -25,7 +25,7 @@ from tools.legalrect.expr_tree import (
 )
 from tools.legalrect.expr_tree import sqrt as expr_sqrt
 from tools.legalrect.modelwrap import ModelWrapper
-from tools.rect.canvas import Canvas
+from tools.legalrect.canvas import Canvas
 from argparse import ArgumentParser
 import matplotlib.pyplot as plt
 
