@@ -2,7 +2,7 @@
 
 # FRAME: Floorplanning with RectilineAr ModulEs
 
-[![Lint & Test](https://github.com/jordicf/FRAME/actions/workflows/python-app.yml/badge.svg?branch=master)](https://github.com/jordicf/FRAME/actions/workflows/python-app.yml)
+[![Lint & Test](https://github.com/jordicf/CPUPC/actions/workflows/python-app.yml/badge.svg?branch=master)](https://github.com/jordicf/CPUPC/actions/workflows/python-app.yml)
 
 Chip planning is the first task in the physical design of integrated circuits.
 During chip planning, the location and shapes of large modules are defined, pins are assigned, 
