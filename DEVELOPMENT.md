@@ -1,12 +1,12 @@
 # `CPUPC` Development
 
-`CPUPC` is both a Python library (the `frame` package and its subpackages) and a set of tools
+`CPUPC` is both a Python library (the `cpupc` package and its subpackages) and a set of tools
 accessible from the `cpupc` command-line utility.
 
 ## Installation for development
 
-The following instructions will install both the `frame` Python package (and subpackages) and the
-`frame` command-line utility.
+The following instructions will install both the `cpupc` Python package (and subpackages) and the
+`cpupc` command-line utility.
 
 First, install [Python 3](https://www.python.org/downloads/) and [Git](https://git-scm.com/download/).
 Then, open a terminal and execute the following commands, depending on your operating system:
@@ -73,10 +73,10 @@ from the top-level project folder. Note that the package name should be the one 
 
 ### Adding a new subpackage
 
-To add a new subpackage to the `frame` Python package, create a new directory inside the
-[`frame` directory](frame). This new folder should contain an empty `__init__.py`
+To add a new subpackage to the `cpupc` Python package, create a new directory inside the
+[`cpupc` directory](cpupc). This new folder should contain an empty `__init__.py`
 file, and all the Python code of the new subpackage. Then, add the subpackage name (prefixed with
-`frame.`) in the `packages` list of the `[tool.setuptools]` of the 
+`cpupc.`) in the `packages` list of the `[tool.setuptools]` of the 
 [`pyproject.toml` file](pyproject.toml). Finally, re-execute `pip install -e '.[mypy,jupyter]'` from the
 top-level project folder.
 
@@ -87,7 +87,7 @@ contain an empty `__init__.py` file too, and the scripts defining the unit tests
 
 ### Adding a new tool
 
-To add a new tool to the `frame` command-line utility, create a new directory inside the
+To add a new tool to the `cpupc` command-line utility, create a new directory inside the
 [`tools` directory](tools). This new folder should contain an empty `__init__.py` file, and all the
 code of the new tool. In particular, the main function of the tool should have the following
 signature:
@@ -101,7 +101,7 @@ of arguments passed to the tool. These arguments should be parsed using the
 [`argparse` module](https://docs.python.org/3/library/argparse.html). Then, add the tool name
 (prefixed with `tools.`) in the `packages` list of the `[tool.setuptools]` of the 
 [`pyproject.toml` file](pyproject.toml), and specify the tool name and the main function to call in 
-the `TOOLS` dictionary in [`tools/frame.py`](tools/frame.py). Finally, re-execute 
+the `TOOLS` dictionary in [`tools/cpupc.py`](tools/frame.py). Finally, re-execute 
 `pip install -e '.[mypy,jupyter]'` from the top-level project folder.
 
 To add unit tests for the new tool, create a new directory inside the
