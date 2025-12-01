@@ -1,4 +1,4 @@
-<img src="pict/Frame.png" alt="drawing" style="height: 35px;"/>
+<img src="pict/CPUPC.png" alt="drawing" style="height: 35px;"/>
 
 # Die Exchange Format (DIEF)
 
