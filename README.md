@@ -1,4 +1,4 @@
-<img src="doc/pict/CPUPC.png" alt="drawing" style="height: 35px;"/>
+<img src="doc/pict/CPUPC.png" alt="drawing" style="height: 50px;"/>
 
 # CPUPC: Chip Planning at UPC
 
