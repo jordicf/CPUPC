@@ -1,17 +1,17 @@
-<img src="doc/pict/Frame.png" alt="drawing" style="height: 35px;"/> 
+<img src="doc/pict/Frame.png" alt="drawing" style="height: 35px;"/>
 
 # CPUPC: Chip Planning at UPC
 
 [![Lint & Test](https://github.com/jordicf/CPUPC/actions/workflows/python-app.yml/badge.svg?branch=master)](https://github.com/jordicf/CPUPC/actions/workflows/python-app.yml)
 
 Chip planning is the first task in the physical design of integrated circuits.
-During chip planning, the location and shapes of large modules are defined, pins are assigned, 
-and the power delivery network is laid out. The quality of the chip, 
+During chip planning, the location and shapes of large modules are defined, pins are assigned,
+and the power delivery network is laid out. The quality of the chip,
 in terms of area, wirelength and timing, highly depends on the top-level
 early decisions taken during chip planning.
 
 `CPUPC` is a framework for floorplanning, which is the chip planning stage
-that positions and shapes the modules on the die. Modules can range from 
+that positions and shapes the modules on the die. Modules can range from
 hard fixed-size blocks to soft free-form IP cores with several million gates
 and embedded memories.
 
@@ -40,7 +40,7 @@ Similarly, different models can be used to estimate the wirelength of the nets:
 
 * Euclidean distance
 * Half-Perimeter Wire Length (HPWL) of the bounding box
-* Log-Sum-Exp approximations of the bounding box 
+* Log-Sum-Exp approximations of the bounding box
 
 When floorplanning is automated, a pipeline of optimization tasks based on
 mathematical models is typically envisioned, using different abstractions,
@@ -55,7 +55,7 @@ Rectangular dies may have unusuable regions (blockages). Some blocks may represe
 
 `CPUPC` allows the shapes of soft modules to be orthogonal polygons.
 An interesting class of polygons is the one called
-[*Single-Truck Orthogonal Polygons (STROPs)*](doc/STROP.md), which is a subclass of polygons that admits geometries beyond the conventional L-, T-, Z- or U-shapes.
+[_Single-Truck Orthogonal Polygons (STROPs)_](doc/STROP.md), which is a subclass of polygons that admits geometries beyond the conventional L-, T-, Z- or U-shapes.
 
 In the future, `CPUPC` will also support dies with dedicated regions.
 A typical example is an FPGA die with slices dedicated to BRAMs or DSPs, as shown in the figure below.
@@ -73,14 +73,14 @@ used that combines the accuracy of the representation with the optimality of the
 `CPUPC` exploits mathematical and algorithmic methods to progressively refine the floorplanning information.
 
 A possible set of techniques for the floorplanning flow is next described.
-At the beginning, modules can be treated as points or circles. Spectral methods, based on the computation 
-of eigenvectors and eigenvalues from the netlist hypergraph, can be used to find good relative positions 
-of the modules. Next, force-directed methods can be used to find a good spreading across the die, possibly 
-using the eigenvectors as initial solutions. Modules can then be represented as clouds that can adopt 
-different shapes to accommodate the required area. Gradient-based non-linear optimization techniques can be 
+At the beginning, modules can be treated as points or circles. Spectral methods, based on the computation
+of eigenvectors and eigenvalues from the netlist hypergraph, can be used to find good relative positions
+of the modules. Next, force-directed methods can be used to find a good spreading across the die, possibly
+using the eigenvectors as initial solutions. Modules can then be represented as clouds that can adopt
+different shapes to accommodate the required area. Gradient-based non-linear optimization techniques can be
 used to reshape the modules using non-rectilinear free forms. The non-optimality of local minima can be
 mitigated by providing a good initial approximation obtained from the previous stage.
-Combinatorial optimization techniques (e.g., SAT or pseudo-Boolean optimization) can next be used to find 
+Combinatorial optimization techniques (e.g., SAT or pseudo-Boolean optimization) can next be used to find
 rectilinear approximations of the modules (orthogons) on a virtual grid.
 A final step may use non-linear optimization to legalize locations and shapes such that
 module overlaps are eliminated.

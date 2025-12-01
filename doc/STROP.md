@@ -83,7 +83,7 @@ can be modeled by differentiable functions.
 #### Example
 
 Let us assume that a rectangle is represented by the coordinates of its center *(x,y)*, width (*w*) and height
-(*h*). Let us consider a STROP with a trunk (*T*) and an *East*-branch (*B*). 
+(*h*). Let us consider a STROP with a trunk (*T*) and an *East*-branch (*B*).
 
 <img src="pict/strop-constraints.png" alt="STROP constraints" style="width: 350px;"/>
 
