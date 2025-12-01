@@ -5,7 +5,7 @@
 
 import unittest
 from pprint import pprint
-from frame.geometry.fpolygon import FPolygon, XY_Box, StropDecomposition
+from frame.geometry.fpolygon import FPolygon, XY_Box
 
 
 class TestFPolygon(unittest.TestCase):

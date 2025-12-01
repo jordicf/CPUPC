@@ -10,7 +10,7 @@ from frame.geometry.strop import Polygon, OccMatrix
 
 
 def str2OccMatrix(s: str) -> OccMatrix:
-    """It generates an occupancy matrix from a string. The string constains
+    """It generates an occupancy matrix from a string. The string contains
     the number of rows of columns of the matrix followed by a sequence
     of floats in [0,1] representing the occupancy of each cell.
     An exception is raised in case the string does not represent
@@ -23,7 +23,7 @@ def str2OccMatrix(s: str) -> OccMatrix:
     lst_float = [float(x) for x in lst[2:]]
     assert len(lst_float) == nrows * ncolumns, err_msg
     assert all(0 <= x <= 1.0 for x in lst_float), err_msg
-    return np.reshape(np.array(lst_float), shape=(nrows, ncolumns))
+    return np.array(lst_float).reshape((nrows, ncolumns))
 
 
 def check_matrix(matrix: str, sol: set[str] = set()) -> bool:

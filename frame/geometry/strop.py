@@ -60,8 +60,8 @@ import numpy as np
 import numpy.typing as npt
 
 # Types to represent Boolean matrices and occupancy matrices =
-BoolRow = npt.NDArray[np.bool]  # A vector of Booleans
-BoolMatrix = npt.NDArray[np.bool]  # A matrix of Booleans
+BoolRow = npt.NDArray[np.bool_]  # A vector of Booleans
+BoolMatrix = npt.NDArray[np.bool_]  # A matrix of Booleans
 # An occupancy matrix is a matrix of floats in [0,1]
 # representing the occupancy of a module in a Hanan grid.
 OccMatrix = npt.NDArray[np.float64]
