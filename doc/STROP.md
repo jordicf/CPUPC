@@ -7,7 +7,7 @@
 
 ---
 
-`FRAME` can deal with rectilinear modules that are represented by
+`CPUPC` can deal with rectilinear modules that are represented by
 [Rectilinear Polygons](https://en.wikipedia.org/wiki/Rectilinear_polygon), 
 also called Orthogonal Polygons.
 
@@ -76,7 +76,7 @@ as the trunk can still be extended to the right (as shown in the first decomposi
 
 ### Why STROPs?
 
-Some of the `FRAME` stages are based on non-convex optimization models, which typically use gradient-descent algorithms
+Some of the `CPUPC` stages are based on non-convex optimization models, which typically use gradient-descent algorithms
 for finding local minima. It is convenient that the constraints used to characterize the structure of a STROP
 can be modeled by differentiable functions.
 

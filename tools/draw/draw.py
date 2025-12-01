@@ -1,17 +1,17 @@
 # (c) Jordi Cortadella 2022
-# For the FRAME Project.
-# Licensed under the MIT License (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
+# For the CPUPC Project.
+# Licensed under the MIT License (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 """
 Package to draw a netlist in which the modules are represented by rectangles
 """
 
-from frame.allocation.allocation import Allocation
-from frame.netlist.netlist_types import HyperEdge
-from frame.netlist.netlist import Netlist
-from frame.netlist.module import Module
-from frame.geometry.geometry import Point, Shape, Rectangle, BoundingBox
-from frame.die.die import Die
+from cpupc.allocation.allocation import Allocation
+from cpupc.netlist.netlist_types import HyperEdge
+from cpupc.netlist.netlist import Netlist
+from cpupc.netlist.module import Module
+from cpupc.geometry.geometry import Point, Shape, Rectangle, BoundingBox
+from cpupc.die.die import Die
 import math
 from argparse import ArgumentParser
 from typing import Any, Optional
@@ -101,12 +101,12 @@ def check_modules(modules: list[Module]) -> None:
     for m in modules:
         if m.num_rectangles > 0:
             continue
-        assert m.center is not None, (
-            f"module {m.name} is not drawable. It has neither center nor rectangles."
-        )
-        assert m.area() > 0 or m.is_iopin, (
-            f"module {m.name} is not drawable (no area specified)."
-        )
+        assert (
+            m.center is not None
+        ), f"module {m.name} is not drawable. It has neither center nor rectangles."
+        assert (
+            m.area() > 0 or m.is_iopin
+        ), f"module {m.name} is not drawable (no area specified)."
 
 
 def calculate_bbox(netlist: Netlist) -> Shape:
@@ -393,9 +393,7 @@ def parse_options(
         metavar="<WIDTH>x<HEIGHT> or FILENAME",
         help="size of the die (width x height) or name of the file",
     )
-    parser.add_argument(
-        "--no_nets", help="do not draw the nets", action="store_true"
-    )
+    parser.add_argument("--no_nets", help="do not draw the nets", action="store_true")
     parser.add_argument(
         "--alloc",
         metavar="FILENAME",

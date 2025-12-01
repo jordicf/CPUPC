@@ -1,4 +1,4 @@
-<img src="pict/Frame.png" alt="FRAME" style="height: 35px;"/>
+<img src="pict/Frame.png" alt="CPUPC" style="height: 35px;"/>
 
 # Floorplan Exchange Format (FPEF)
 **Author:** [Jordi Cortadella](https://www.cs.upc.edu/~jordicf)

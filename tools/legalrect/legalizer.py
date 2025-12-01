@@ -1,6 +1,6 @@
 # (c) Ylham Imam, 2025
-# For the FRAME Project.
-# Licensed under the MIT License (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
+# For the CPUPC Project.
+# Licensed under the MIT License (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 from random import randint
 from time import time
 from typing import Any, TypeVar, Union
@@ -12,9 +12,9 @@ from math import sqrt
 import sys
 
 # import numpy as np
-from frame.die.die import Die
-from frame.netlist.netlist import Netlist
-from frame.geometry.geometry import Rectangle
+from cpupc.die.die import Die
+from cpupc.netlist.netlist import Netlist
+from cpupc.geometry.geometry import Rectangle
 from tools.legalrect.expr_tree import (
     ExpressionTree,
     Cmp,

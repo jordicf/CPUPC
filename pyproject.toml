@@ -3,9 +3,9 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "frame"
+name = "cpupc"
 version = "0.1"
-description = "Floorplanning with RectilineAr ModulEs"
+description = "Chip Planning at UPC"
 readme = "README.md"
 license = { file = "LICENSE.txt" }
 dependencies = [
@@ -41,16 +41,16 @@ jupyter = [
 homepage = "https://github.com/jordicf/CPUPC"
 
 [project.scripts]
-frame = "tools.frame_tools:main"
+cpupc = "tools.cpupc_tools:main"
 
 [tool.setuptools]
 packages = [
-    "frame",
-    "frame.allocation",
-    "frame.die",
-    "frame.geometry",
-    "frame.netlist",
-    "frame.utils",
+    "cpupc",
+    "cpupc.allocation",
+    "cpupc.die",
+    "cpupc.geometry",
+    "cpupc.netlist",
+    "cpupc.utils",
     "tools",
     "tools.draw",
     "tools.hello",

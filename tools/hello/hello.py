@@ -1,6 +1,6 @@
 # (c) Marçal Comajoan Cara 2022
-# For the FRAME Project.
-# Licensed under the MIT License (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
+# For the CPUPC Project.
+# Licensed under the MIT License (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 """Says hello."""
 import argparse
@@ -18,7 +18,9 @@ def hello(name: str | None = None) -> str:
     return f"Hello {name}!"
 
 
-def parse_options(prog: str | None = None, args: list[str] | None = None) -> dict[str, Any]:
+def parse_options(
+    prog: str | None = None, args: list[str] | None = None
+) -> dict[str, Any]:
     """
     Parse the command-line arguments for the tool
     :param prog: tool name

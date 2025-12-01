@@ -1,11 +1,11 @@
 # (c) Jordi Cortadella 2025
-# For the FRAME Project.
+# For the CPUPC Project.
 # Licensed under the MIT License
-# (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 from dataclasses import dataclass
-from frame.netlist.netlist import Netlist
-from frame.netlist.module import Module
+from cpupc.netlist.netlist import Netlist
+from cpupc.netlist.module import Module
 
 
 @dataclass(slots=True)
@@ -116,7 +116,7 @@ class swapNetlist:
         for p in self.points:
             # Sorted and unique nets (to avoid repeated nets)
             p.nets = sorted(set(p.nets))
-            
+
         # Compute initial HPWL
         self.hpwl = sum(self._compute_net_hpwl(net) for net in self.nets)
 
@@ -169,7 +169,7 @@ class swapNetlist:
         ys = [self.points[p].y for p in net.points]
         net.hpwl = (max(xs) - min(xs) + max(ys) - min(ys)) * net.weight
         return net.hpwl
-    
+
     def compute_total_hpwl(self) -> float:
         """Compute the total half-perimeter wire length (HPWL) of the netlist.
         It returns the computed total HPWL."""

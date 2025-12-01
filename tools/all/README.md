@@ -1,5 +1,5 @@
 # `frame all`
 
-Run the whole FRAME flow in a single command.
+Run the whole CPUPC flow in a single command.
 
 Execute `frame all --help` for help.

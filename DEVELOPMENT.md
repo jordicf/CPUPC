@@ -34,7 +34,7 @@ pip install -e '.[mypy,jupyter]'
 ### PyCharm configuration
 
 If you use PyCharm, to configure the project Python interpreter go to File | Settings... |
-Project: FRAME | Python Interpreter.
+Project: CPUPC | Python Interpreter.
 Then click the gears icon, Add..., and choose Existing environment and select Interpreter as the one
 in the `CPUPC/venv` folder.
 
@@ -47,8 +47,8 @@ including only the CPUPC code can be helpful to speed up the inspection and not 
 third-party code.
 
 ```console
-file[CPUPC]:frame//*.py
-file[CPUPC]:frame//*.ipynb
+file[CPUPC]:cpupc//*.py
+file[CPUPC]:cpupc//*.ipynb
 file[CPUPC]:tests//*.py
 file[CPUPC]:tools//*.py
 file[CPUPC]:tests//*.ipynb
@@ -82,7 +82,7 @@ file, and all the Python code of the new subpackage. Then, add the subpackage na
 top-level project folder.
 
 To add unit tests for the new subpackage, create a new directory inside the
-[`tests/frame` folder](tests/frame) with the name of the subpackage. This folder should
+[`tests/cpupc` folder](tests/cpupc) with the name of the subpackage. This folder should
 contain an empty `__init__.py` file too, and the scripts defining the unit tests using the
 [`unittest` unit testing framework](https://docs.python.org/3/library/unittest.html).
 
@@ -102,7 +102,7 @@ of arguments passed to the tool. These arguments should be parsed using the
 [`argparse` module](https://docs.python.org/3/library/argparse.html). Then, add the tool name
 (prefixed with `tools.`) in the `packages` list of the `[tool.setuptools]` of the
 [`pyproject.toml` file](pyproject.toml), and specify the tool name and the main function to call in
-the `TOOLS` dictionary in [`tools/cpupc.py`](tools/frame.py). Finally, re-execute
+the `TOOLS` dictionary in [`tools/cpupc.py`](tools/cpupc.py). Finally, re-execute
 `pip install -e '.[mypy,jupyter]'` from the top-level project folder.
 
 To add unit tests for the new tool, create a new directory inside the

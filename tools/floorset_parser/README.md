@@ -24,7 +24,7 @@ The `floorplan_data` dictionary loaded from the FloorSet dataset folder is expec
    * Columns indicate: [hard, fixed, multi-instantiation, cluster, boundary].
       * Hard: Can translate and rotate but not change of shape.
       * Fixed: Like Pre-placed, the shape and location are unchangeable
-      * Multi-instantiation, cluster and boundary are not considered in FRAME.
+      * Multi-instantiation, cluster and boundary are not considered in CPUPC.
    * Values must be non-negative.
 
 - `vertex_blocks`: Can be two type of representations,

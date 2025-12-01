@@ -1,7 +1,7 @@
 # (c) Jordi Cortadella 2025
-# For the FRAME Project.
+# For the CPUPC Project.
 # Licensed under the MIT License
-# (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 """Simulated annealing optimization for module centroid swapping."""
 
 import math
@@ -213,7 +213,7 @@ def jit_simulated_annealing(
                 net.undo_swap(idx2, idx1)
 
             avg += current_hpwl
-            
+
         avg /= n_swaps
         if avg >= best_avg:
             no_improvement += 1
@@ -234,7 +234,7 @@ def jit_simulated_annealing(
                 best_hpwl,
             )
         temp = temp * temp_factor
-        
+
     # Restore best solution
     for i, p in enumerate(net.points):
         p.x, p.y = best_xy[i]

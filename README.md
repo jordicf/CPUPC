@@ -1,6 +1,6 @@
 <img src="doc/pict/Frame.png" alt="drawing" style="height: 35px;"/> 
 
-# FRAME: Floorplanning with RectilineAr ModulEs
+# CPUPC: Chip Planning at UPC
 
 [![Lint & Test](https://github.com/jordicf/CPUPC/actions/workflows/python-app.yml/badge.svg?branch=master)](https://github.com/jordicf/CPUPC/actions/workflows/python-app.yml)
 
@@ -10,7 +10,7 @@ and the power delivery network is laid out. The quality of the chip,
 in terms of area, wirelength and timing, highly depends on the top-level
 early decisions taken during chip planning.
 
-`FRAME` is a framework for floorplanning, which is the chip planning stage
+`CPUPC` is a framework for floorplanning, which is the chip planning stage
 that positions and shapes the modules on the die. Modules can range from 
 hard fixed-size blocks to soft free-form IP cores with several million gates
 and embedded memories.
@@ -27,7 +27,7 @@ Modern floorplanning frameworks must provide features that should enable:
 Automation is achieved by running efficient algorithms on mathematical models
 (abstract approximations) of the problem.
 
-`FRAME` envisions _floorplanning_ as a sequence of transformations at different
+`CPUPC` envisions _floorplanning_ as a sequence of transformations at different
 levels of abstraction. Some of the abstractions for modules can be:
 
 * Mass points
@@ -48,29 +48,29 @@ as shown in the figure below.
 
 <img src="doc/pict/FPprocess.png" alt="Evolutive floorplanning" style="height: 160px;"/>
 
-`FRAME` is architected to support a variety of features (see figure below).
+`CPUPC` is architected to support a variety of features (see figure below).
 Rectangular dies may have unusuable regions (blockages). Some blocks may represent hard IP modules that can be moved across the die but cannot be reshaped. Some of these modules may be even nailed down at fixed locations. Finally, soft modules can be placed at any location and adopt different shapes.
 
 <img src="doc/pict/die-soft-hard-fixed.png" alt="Die and modules" style="height: 230px;"/>
 
-`FRAME` allows the shapes of soft modules to be orthogonal polygons.
+`CPUPC` allows the shapes of soft modules to be orthogonal polygons.
 An interesting class of polygons is the one called
 [*Single-Truck Orthogonal Polygons (STROPs)*](doc/STROP.md), which is a subclass of polygons that admits geometries beyond the conventional L-, T-, Z- or U-shapes.
 
-In the future, `FRAME` will also support dies with dedicated regions.
+In the future, `CPUPC` will also support dies with dedicated regions.
 A typical example is an FPGA die with slices dedicated to BRAMs or DSPs, as shown in the figure below.
 Modules may use resources from different regions and floorplanning must take into account
 where these resources are located on the die.
 
 <img src="doc/pict/FPGA_structure.png" alt="Die with dedicated regions" style="height: 200px;"/>
 
-## The `FRAME` pipeline
+## The `CPUPC` pipeline
 
 _Floorplanning_ is a multi-objective problem that cannot be solved using simple algorithmic techniques.
-`FRAME` advocates for a multistep approach moving from coarse abstractions of the modules (e.g., points)
+`CPUPC` advocates for a multistep approach moving from coarse abstractions of the modules (e.g., points)
 to detailed representations (e.g., orthogonal polygons). At each level, a suitable algorithmic strategy is
 used that combines the accuracy of the representation with the optimality of the solution.
-`FRAME` exploits mathematical and algorithmic methods to progressively refine the floorplanning information.
+`CPUPC` exploits mathematical and algorithmic methods to progressively refine the floorplanning information.
 
 A possible set of techniques for the floorplanning flow is next described.
 At the beginning, modules can be treated as points or circles. Spectral methods, based on the computation 
@@ -85,10 +85,10 @@ rectilinear approximations of the modules (orthogons) on a virtual grid.
 A final step may use non-linear optimization to legalize locations and shapes such that
 module overlaps are eliminated.
 
-`FRAME` is designed in a modular way such that new stages can be inserted into the pipeline. These new
+`CPUPC` is designed in a modular way such that new stages can be inserted into the pipeline. These new
 stages can help smooth the jumps between different levels of abstractions and enable the
 interaction with the architect through the definition of physical constraints on the final floorplan.
 
-**Disclaimer**: `FRAME`is a framework in continuous evolution. The contents of this repository shows the current status of the development, with very limited documentation.
+**Disclaimer**: `CPUPC`is a framework in continuous evolution. The contents of this repository shows the current status of the development, with very limited documentation.
 The repository will be consolidated as the different tools are updated and completed. 
 

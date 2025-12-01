@@ -1,7 +1,7 @@
 # (c) Jordi Cortadella 2025
-# For the FRAME Project.
+# For the CPUPC Project.
 # Licensed under the MIT License
-# (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 """Tool to explore different module locations by swapping their centroids"""
 
@@ -62,9 +62,12 @@ def parse_options(
         help="weight factor for nets created by splits (0 to disable splits). "
         "Default: 1.0.",
     )
-    parser.add_argument("-g", "--greedy",
-                        help="greedy optimization after simulated annealing",
-                        action="store_true")
+    parser.add_argument(
+        "-g",
+        "--greedy",
+        help="greedy optimization after simulated annealing",
+        action="store_true",
+    )
 
     return vars(parser.parse_args(args))
 
@@ -79,13 +82,13 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
         patience=options["patience"],
         target_acceptance=options["accept"],
         temp_factor=options["tfactor"],
-        verbose=options["verbose"]
+        verbose=options["verbose"],
     )
-    
+
     if options["greedy"]:
         greedy(netlist, verbose=options["verbose"])
-    
-    netlist.remove_subblocks() # Remnove fake subblocks from splits
+
+    netlist.remove_subblocks()  # Remnove fake subblocks from splits
     # Update the original netlist with the new positions
     netlist.netlist.update_centers(
         {netlist.idx2name(i): (p.x, p.y) for i, p in enumerate(netlist.points)}

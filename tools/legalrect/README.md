@@ -1,4 +1,4 @@
-# FRAME Legalizer Tools
+# CPUPC Legalizer Tools
 
 ## Overview
 
@@ -36,7 +36,7 @@ These solvers transform the legalization problem into a convex optimization prob
 
 - **Soft/Hard/Fixed Module Support**: Handles resizable soft modules, fixed-size hard modules, and fixed-position terminals
 - **Rectilinear Modules**: Full support for trunk+branches structures (L-shape, T-shape, etc.)
-- **Expression Tree Framework**: Symbolic constraint and objective modeling via `expr_tree.py`
+- **Expression Tree framework**: Symbolic constraint and objective modeling via `expr_tree.py`
 - **Model Wrapper**: High-level optimization interface via `modelwrap.py`
 - **Two Modes**:
   - **Global Legalization** (default): Large movements, global optimization
@@ -106,7 +106,7 @@ python tools/legalizer/legalizer.py \
 
 ### 1.2 `glb_legalizer.py` - CasADi-based Global Legalizer
 
-**Interface:** CasADi (Symbolic Framework for Numerical Optimization)  
+**Interface:** CasADi (Symbolic framework for Numerical Optimization)  
 **Solver:** Ipopt (Linux, MACOS, Windows) 
 **Specialty:** Fast global legalization with active set optimization
 
@@ -565,7 +565,7 @@ convert -delay 20 -loop 0 frames/iter_*.png optimization.gif
 
 ## Output Format
 
-All tools output a YAML file compatible with the FRAME netlist format:
+All tools output a YAML file compatible with the CPUPC netlist format:
 
 ```yaml
 Modules:
@@ -630,13 +630,13 @@ module_name:
 
 ## License & Citation
 
-**Author:** Ylham Imam, FRAME Project  
+**Author:** Ylham Imam, CPUPC Project  
 **License:** MIT License  
-**Repository:** https://github.com/jordicf/FRAME
+**Repository:** https://github.com/jordicf/CPUPC
 
 For technical details and theoretical background, please refer to:
 - Source code and inline documentation
-- FRAME project documentation
+- CPUPC project documentation
 - Geometric Programming literature (Boyd et al.)
 
 

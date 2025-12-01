@@ -5,7 +5,7 @@ import urllib.request as ur
 import tarfile
 import numpy as np
 import math
-from frame.geometry.geometry import Point
+from cpupc.geometry.geometry import Point
 
 
 PointSequence = list[Point] | list[np.ndarray]
@@ -215,7 +215,9 @@ def rectangle_decomposition(vertices: PointSequence) -> list[Rectangle]:
             h = y_max - y_min
             # Check if the center is inside the polygon
             if is_point_inside_polygon(Point(center_x, center_y), vertices):
-                rectangles.append([float(center_x), float(center_y), float(w), float(h)])
+                rectangles.append(
+                    [float(center_x), float(center_y), float(w), float(h)]
+                )
 
     return rectangles
 
