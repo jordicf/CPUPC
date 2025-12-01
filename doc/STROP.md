@@ -1,6 +1,7 @@
 <img src="pict/Frame.png" alt="drawing" style="height: 35px;"/>
 
 # Orthogonal polygons
+
 **Author:** [Jordi Cortadella](https://www.cs.upc.edu/~jordicf)
 
 **Date:** August 20th, 2025
@@ -8,7 +9,7 @@
 ---
 
 `CPUPC` can deal with rectilinear modules that are represented by
-[Rectilinear Polygons](https://en.wikipedia.org/wiki/Rectilinear_polygon), 
+[Rectilinear Polygons](https://en.wikipedia.org/wiki/Rectilinear_polygon),
 also called Orthogonal Polygons.
 
 We are interested in *simple* polygons, i.e., polygons without holes. This is a simple polygon:
@@ -22,6 +23,7 @@ Another possible nomenclature for the same acronym is *Star Orthogonal Polygons*
 ## STROP
 
 A STROP is an orthogonal polygon that can be decomposed into a set of disjoint rectangles with the following property:
+
 * One rectangle is called the trunk and the others are called the branches
 * Each branch is adjacent to the trunk and fully shares one of its edges with the trunk
 
@@ -65,7 +67,7 @@ $$\binom{k+3}{k}$$
 
 The decomposition of a STROP into trunk/branch rectangles is not unique.
 The figure shows an orthogonal polygon (left) with three valid decompositions
-(the blue rectangle is the trunk). 
+(the blue rectangle is the trunk).
 
 <img src="pict/strop-decomp.png" alt="STROP decomposition" style="width: 700px;"/>
 
@@ -93,7 +95,7 @@ with regard to the trunk can be modeled with three linear constraints (one equal
 $$
 \begin{eqnarray*}
 x_B & = & x_T + \frac{w_T + w_B}{2} \\
-y_B & \leq & y_T + \frac{h_T-h_B}{2} \\ 
+y_B & \leq & y_T + \frac{h_T-h_B}{2} \\
 y_B & \geq &  y_T + \frac{h_B-h_T}{2}
 \end{eqnarray*}
 $$

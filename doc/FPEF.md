@@ -1,6 +1,7 @@
 <img src="pict/Frame.png" alt="CPUPC" style="height: 35px;"/>
 
 # Floorplan Exchange Format (FPEF)
+
 **Author:** [Jordi Cortadella](https://www.cs.upc.edu/~jordicf)
 
 **Date:** July 2nd, 2022
@@ -16,7 +17,7 @@ with rectilinear shapes, aligned with the _x_ and _y_ axes, such as the one show
 A floorplan can be represented at different levels of abstraction. Depending on the level of
 detail, a module can be seen as a point, a circle,  a rectangle or a rectilinear shape.
 When floorplanning is automated, a sequence of optimization tasks
-based on mathematical models is typically envisioned. `FPEF` can host different levels of 
+based on mathematical models is typically envisioned. `FPEF` can host different levels of
 abstraction for interchanging floorplaning information between different steps of the
 automation process, as shown in the figure below.
 
@@ -25,13 +26,12 @@ automation process, as shown in the figure below.
 ## FPEF top view
 
 Using `YAML`'s nomenclature, a floorplan is a mapping with two mandatory keys:
-`Modules` and `Nets`. 
-Mappings and sequences admit different syntax forms in YAML. In the examples shown in 
+`Modules` and `Nets`.
+Mappings and sequences admit different syntax forms in YAML. In the examples shown in
 this document, only one of these forms is used but the other forms are also accepted.
-In mappings, the order of the keys is irrelevant. 
+In mappings, the order of the keys is irrelevant.
 
 The description of a floorplan has a structure like the one shown in the following example:
-
 
 ~~~yaml
 Modules: {
@@ -51,7 +51,6 @@ Nets: [ # A sequence of hyperedges that represent the connectivity of the module
 ]
 ~~~
 
-
 ## Modules
 
 A module is identified by a name, e.g. `CPU`, and a set of attributes.
@@ -64,10 +63,12 @@ Here is the list of possible attributes:
 * `aspect_ratio`: it represents an interval of values $[x,y]$, with $x\leq 1 \leq y$, acceptable for the ratio $width/height$. For example, the interval `[0.25,3]` represents the constraint $0.25 \leq w/h \leq 3$. This constraint makes sense for rectangular modules. For non-rectangular modules, it is ign ored (maybe a new interpretation will be given in the future).
 * `hard`: indicates whether the module must have a hard (unmutable) shape. Example: `hard: true`. The default value is `false` (soft module).
 * `fixed`: indicates whether the module must be in a fixed location. Example: `fixed: true`. The default value is `false`. A fixed module is assumed to be `hard`.
-* `flip`: indicates whether the module can be flipped horizontally or vertically. Example: `flip: true``. The default value is `false`. Only non-fixed hard modules can be flipped.
+* `flip`: indicates whether the module can be flipped horizontally or vertically.
+  Example: `flip: true`. The default value is `false`. Only non-fixed hard modules can be flipped.
 * `rectangles`: a list of rectangles that determine the floorplan of the module. See below.
 
 Here is an example with some attributes:
+
 ~~~yaml
   M1: {
     area: 80,
@@ -85,7 +86,7 @@ Here is an example with some attributes:
   }
 ~~~
 
-#### Module geometry
+### Module geometry
 
 A rectilinear module can be represented by a set of rectangles, as shown in the figure.
 
@@ -103,7 +104,6 @@ Here we can see an example with two moduless, each one with a different type of 
 
 <img src="pict/TwoBlocksRectangles.png" alt="Modules represented as rectangles" style="height: 85px;"/>
 
-
 ~~~yaml
   M1: {
     rectangles: [17, 2, 14, 4], # Just one rectangle associated to Ground (red in the figure)
@@ -118,19 +118,18 @@ Here we can see an example with two moduless, each one with a different type of 
   }
 ~~~
 
-
-Since `FPEF` can be used to represent intermediate 
-steps of a floorplanning process, the description of a module does not need to be legal, e.g., 
-rectangles may overlap or fall outside the bounding box of the floorplan. The rectangles must be 
-interpreted as _preferred_ regions where a module would like to be located and the information can be 
-used to define the initial point of a mathematical model. At the end of a complete 
-floorplanning process, a legal configuration might be required. The constraints for legalization may 
+Since `FPEF` can be used to represent intermediate
+steps of a floorplanning process, the description of a module does not need to be legal, e.g.,
+rectangles may overlap or fall outside the bounding box of the floorplan. The rectangles must be
+interpreted as _preferred_ regions where a module would like to be located and the information can be
+used to define the initial point of a mathematical model. At the end of a complete
+floorplanning process, a legal configuration might be required. The constraints for legalization may
 be different depending on the context.
 
 ## I/O pins
 
 `FPEF` specifies I/O pins as modules with zero area. The attribute `io_pin` must be set to `true`.
-An I/O pin represents an array of pins with a certain *length*. You may interpret the I/O pin length as 
+An I/O pin represents an array of pins with a certain _length_. You may interpret the I/O pin length as
 $$\textrm{length} = \textrm{\#pins} \times \textrm{pin pitch}$$
 
 For I/O pins, the `area` attribute is not admissible. Instead, the `length` attribute is used. The location of the I/O pins is represented as zero-area rectangles in which one of the dimensions (width or height) is zero. A pin with width=height=0 (a point) can also be specified.
@@ -164,12 +163,11 @@ Modules: {
 }
 ~~~
 
-
-
 ## Nets
 
 Nets are represented as weighted sets of modules. The weight can be interpreted as the thickness
 (number of wires) of the net. Here is an example with more details on how nets are specified:
+
 ~~~yaml
 Modules: {
   # ...

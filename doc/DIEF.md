@@ -1,6 +1,7 @@
 <img src="pict/Frame.png" alt="drawing" style="height: 35px;"/>
 
 # Die Exchange Format (DIEF)
+
 **Author:** [Jordi Cortadella](https://www.cs.upc.edu/~jordicf)
 
 **Date:** August 21, 2025
@@ -19,7 +20,6 @@ The die can be simply the description of a rectangle (width and height)
 or a set of non-overlapping rectangles associated to regions, where every region is identified by some type of resource.
 This is the classical example of FPGA slices associated to BRAMs or DSPs, as shown in the
 figure.
-
 
 <img src="pict/FPGA_structure.png" alt="FPGA die" style="height: 200px;"/>
 
@@ -40,7 +40,6 @@ rectangles: [
 ]
 ~~~
 
-
 ## Non-rectangular dies
 
 For hierarchical floorplanning, the die may not represent the entire chip but
@@ -50,7 +49,7 @@ floorplanned, as shown in the figure below.
 <img src="pict/Die-Blockages.png" alt="Die blockages" style="height: 200px;"/>
 
 Non-rectangular dies can be specified with a set of rectangles that represent
-forbidden regions (blockages). Blockages can be specified as rectangles of a 
+forbidden regions (blockages). Blockages can be specified as rectangles of a
 particular case of regions (with label `#`).
 The previous example has two blockages that can be specified as follows:
 
@@ -87,7 +86,7 @@ Let us consider the previous non-rectangular die with four I/O pins
 (modules of the netlist): `W`, `X`, `Y` and `Z`.
 The left figure shows the assigned segments for each I/O pin. In this case,
 the segments for `Y`and `Z` overlap, indicating that these segments can
-either accept pins from `Y`or `Z`. The figure at the right shows a possible 
+either accept pins from `Y`or `Z`. The figure at the right shows a possible
 I/O pin assignment after floorplanning.
 
 <img src="pict/Die-IO.png" alt="Die IO segments" style="height: 200px;"/>
@@ -108,5 +107,3 @@ io_segments: {
     'Z': [[17.5, 0, 5, 0], [20, 2.5, 0, 5]] # horizontal and vertical segments for Z
 }
 ~~~
-
-

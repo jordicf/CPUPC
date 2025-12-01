@@ -6,7 +6,7 @@ a circle.
 
 ## Usage
 
-```
+```console
 usage: frame draw [options]
 
 A floorplan drawing tool.
