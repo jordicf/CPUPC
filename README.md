@@ -90,5 +90,4 @@ stages can help smooth the jumps between different levels of abstractions and en
 interaction with the architect through the definition of physical constraints on the final floorplan.
 
 **Disclaimer**: `CPUPC`is a framework in continuous evolution. The contents of this repository shows the current status of the development, with very limited documentation.
-The repository will be consolidated as the different tools are updated and completed. 
-
+The repository will be consolidated as the different tools are updated and completed.

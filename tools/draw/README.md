@@ -37,5 +37,3 @@ The option `--outfile` is optional. If not specified, the name of the input file
 suffix is added (substituting the original suffix).
 
 The `--frame` option is used to specify a frame around the die.
-
-
