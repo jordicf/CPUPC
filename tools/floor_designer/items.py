@@ -1,7 +1,7 @@
 from __future__ import annotations
 import rportion as rp # type: ignore
 from random import randint
-from graphical_view import GraphicalView
+from .graphical_view import GraphicalView
 from PySide6.QtWidgets import (QGraphicsRectItem,QGraphicsItem,QGraphicsSceneMouseEvent,QGraphicsSceneHoverEvent,
     QStyleOptionGraphicsItem, QGraphicsItemGroup, QGraphicsLineItem, QWidget, QGraphicsTextItem
 )

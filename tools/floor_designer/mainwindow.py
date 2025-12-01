@@ -1,6 +1,6 @@
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QMainWindow,QToolBar,QPushButton,QStatusBar, QApplication, QTabWidget, QMessageBox, QFileDialog
-from centralwidgets import FloorplanDesigner, CreateModule, CreateRectangle
+from .centralwidgets import FloorplanDesigner, CreateModule, CreateRectangle
 
 class MainWindow(QMainWindow):
     """Main application window for the floorplanning tool.

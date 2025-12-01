@@ -59,7 +59,8 @@ packages = [
     "tools.fastpswap",
     "tools.inipoints",
     "tools.inirects",
-    "tools.all"
+    "tools.all",
+    "tools.floor_designer"
 ]
 
 [tool.mypy]

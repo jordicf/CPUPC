@@ -26,9 +26,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QBrush, QColor, QResizeEvent
-from graphical_view import GraphicalView
+from .graphical_view import GraphicalView
 from tools.floor_designer.items import Module, FlyLine, RectObj
-from items import MIN_PIN_SIZE
+from .items import MIN_PIN_SIZE
 
 from cpupc.netlist.netlist import Netlist
 from cpupc.geometry.geometry import Rectangle, Point, Shape
