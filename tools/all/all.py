@@ -1,4 +1,4 @@
-# (c) Marçal Comajoan Cara 2022
+# (c) Marçal Comajoan Cara 2025
 # For the CPUPC Project.
 # Licensed under the MIT License (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
