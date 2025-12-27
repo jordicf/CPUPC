@@ -17,6 +17,7 @@ PROJECT = "cpupc"
 
 TOOLS = {
     "hello": "tools.hello.hello",
+    "spectral": "tools.spectral.spectral",
     "draw": "tools.draw.draw",
     "legalizer": "tools.legalrect.legalizer",
     "glb_legalizer": "tools.legalrect.glb_legalizer",
