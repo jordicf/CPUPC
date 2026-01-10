@@ -131,6 +131,7 @@ def simulated_annealing(
     patience: int,
     target_acceptance: float = 0.5,
     temp_factor: float = 0.95,
+    seed: int | None = None,
     verbose: bool = False,
 ) -> None:
     if verbose:
@@ -147,7 +148,7 @@ def simulated_annealing(
 
     # Fast simulated annealintg using Numba JIT compilation
     jit_simulated_annealing(
-        jit_net, n_swaps, patience, target_acceptance, temp_factor, verbose
+        jit_net, n_swaps, patience, target_acceptance, temp_factor, seed, verbose
     )
 
     # Recover the optimized positions
@@ -164,6 +165,7 @@ def jit_simulated_annealing(
     patience: int,
     target_acceptance: float,
     temp_factor: float,
+    seed: int | None,
     verbose: bool,
 ) -> None:
     """Optimize the netlist using simulated annealing.
@@ -174,6 +176,9 @@ def jit_simulated_annealing(
     n_swaps is the number of swaps to perform per iteration and per movable point.
     Note that the total number of swaps per iteration is multiplied by the
     number of movable points."""
+
+    if seed is not None:
+        np.random.seed(seed)
 
     if verbose:
         print("Running JIT-compiled simulated annealing...")

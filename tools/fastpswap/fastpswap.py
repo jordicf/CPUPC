@@ -9,7 +9,7 @@ import argparse
 import pathlib
 from typing import Any, Optional
 from .netlist import swapNetlist
-from .anneal import simulated_annealing
+from .anneal_cached import simulated_annealing
 from .greedy import greedy
 
 
@@ -68,6 +68,12 @@ def parse_options(
         help="greedy optimization after simulated annealing",
         action="store_true",
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="random seed for deterministic results",
+    )
 
     return vars(parser.parse_args(args))
 
@@ -82,6 +88,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
         patience=options["patience"],
         target_acceptance=options["accept"],
         temp_factor=options["tfactor"],
+        seed=options["seed"],
         verbose=options["verbose"],
     )
 
