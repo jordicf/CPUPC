@@ -1,3 +1,13 @@
+# (c) Nuria Elizondo 2025
+# For the CPUPC Project.
+# Licensed under the MIT License
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
+
+"""
+Graphics view for displaying and interacting with a scene.
+Suports zooming.
+"""
+
 from PySide6.QtWidgets import (
     QGraphicsView,
     QGraphicsScene,

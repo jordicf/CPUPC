@@ -1,3 +1,13 @@
+# (c) Nuria Elizondo 2025
+# For the CPUPC Project.
+# Licensed under the MIT License
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
+
+"""
+This file defines the main graphical elements used in the views.
+It includes modules made of rectangles, resize handles, and flylines connecting modules.
+"""
+
 from __future__ import annotations
 import rportion as rp # type: ignore
 from random import randint

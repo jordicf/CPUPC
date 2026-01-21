@@ -1,3 +1,12 @@
+# (c) Nuria Elizondo 2025
+# For the CPUPC Project.
+# Licensed under the MIT License
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
+
+"""
+This file runs the applicaion. It opens the main window to edit the floorplan.
+"""
+
 
 import sys
 import argparse

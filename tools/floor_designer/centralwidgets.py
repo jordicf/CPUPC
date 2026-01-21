@@ -1,3 +1,13 @@
+# (c) Nuria Elizondo 2025
+# For the CPUPC Project.
+# Licensed under the MIT License
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
+
+"""
+This module contains the main widgets for the application.
+Includes widgets for interactive floorplan editing, adding modules, and adding rectangles.
+"""
+
 import distinctipy  # pyright: ignore[reportMissingTypeStubs]
 import rportion as rp  # pyright: ignore[reportMissingTypeStubs]
 from typing import Iterator

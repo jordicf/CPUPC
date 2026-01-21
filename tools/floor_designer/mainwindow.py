@@ -1,3 +1,13 @@
+# (c) Nuria Elizondo 2025
+# For the CPUPC Project.
+# Licensed under the MIT License
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
+
+"""
+This file defines the main applicartion window.
+It brings together the main tools and handles menus and application actions.
+"""
+
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtWidgets import QMainWindow,QToolBar,QPushButton,QStatusBar, QApplication, QTabWidget, QMessageBox, QFileDialog
 from .centralwidgets import FloorplanDesigner, CreateModule, CreateRectangle
