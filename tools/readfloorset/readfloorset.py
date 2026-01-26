@@ -1,0 +1,63 @@
+# (c) Jordi Cortadella 2026
+# For the CPUPC Project.
+# Licensed under the MIT License
+# (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
+
+"""Tool to read a netlist in the floorset format"""
+
+import argparse
+import pathlib
+from typing import Any, Optional
+from .readnetlist import read_floorset_netlist
+from cpupc.utils.utils import (
+    write_json_yaml,
+    file_type_from_suffix,
+    FileType,
+    Python_object,
+)
+
+
+def parse_options(
+    prog: Optional[str] = None, args: Optional[list[str]] = None
+) -> dict[str, Any]:
+    """
+    Parse the command-line arguments for the tool
+    :param prog: tool name
+    :param args: command-line arguments
+    :return: a dictionary with the arguments
+    """
+    parser = argparse.ArgumentParser(
+        prog=prog,
+        usage="%(prog)s [options]",
+        description="Reads a netlist in floorset format and generates the same"
+        "netlist in FPEF format.",
+    )
+    parser.add_argument("--data", required=True, help="input file (data)")
+    parser.add_argument("--label", required=True, help="input file (label)")
+    parser.add_argument("--netlist", required=True, help="output netlist)")
+    parser.add_argument("--die", help="output die file (optional)")
+    parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
+    return vars(parser.parse_args(args))
+
+
+def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
+    """Main function."""
+    options = parse_options(prog, args)
+
+    # Before doing anything, check output file suffix
+    netlist_type = file_type_from_suffix(options["netlist"])
+    assert netlist_type != FileType.UNKNOWN, "Unknown suffix for netlist file"
+    if options["die"] is not None:
+        assert (
+            file_type_from_suffix(options["die"]) != FileType.UNKNOWN
+        ), "Unknown suffix for die file"
+
+    netlist = read_floorset_netlist(
+        options["data"], options["label"], options["verbose"]
+    )
+
+    write_json_yaml(netlist, netlist_type == FileType.JSON, options["netlist"])
+
+
+if __name__ == "__main__":
+    main()

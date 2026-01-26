@@ -9,6 +9,7 @@ Types used in the netlist
 
 from dataclasses import dataclass
 from math import sqrt
+from typing import Iterator
 
 from .module import Module
 from ..geometry.geometry import Point
@@ -73,3 +74,40 @@ class HyperEdge:
         if self.weight == 1:
             return f"Edge<modules={names}>"
         return f"Edge<modules={names}, weight={self.weight}>"
+
+
+class ModuleClusters:
+    """
+    Representation of clusters of modules in the netlist.
+    Each cluster is a list of module names.
+    """
+
+    _clusters: dict[str, set[Module]]  # Mapping from cluster name to set of modules
+
+    def __init__(self):
+        self._clusters = {}
+
+    def add_module_to_cluster(self, cluster_name: str, module: Module):
+        """Adds a module to a cluster."""
+        if cluster_name not in self._clusters:
+            self._clusters[cluster_name] = set()
+        self._clusters[cluster_name].add(module)
+
+    def get_cluster_names(self) -> list[str]:
+        """Returns the list of cluster names."""
+        return list(self._clusters.keys())
+
+    def get_modules_in_cluster(self, cluster_name: str) -> set[Module]:
+        """Returns the set of modules in a cluster."""
+        assert (
+            cluster_name in self._clusters
+        ), f"Cluster {cluster_name} does not exist in the netlist"
+        return self._clusters[cluster_name]
+    
+    def get_clusters(self) -> Iterator[set[Module]]:
+        """Returns an iterator over the clusters."""
+        for cluster in self._clusters.values():
+            yield cluster
+
+    def __repr__(self) -> str:
+        return f"ModuleClusters<clusters={self._clusters}>"

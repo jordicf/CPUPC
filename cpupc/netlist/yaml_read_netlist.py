@@ -26,17 +26,17 @@ from cpupc.utils.utils import (
 )
 
 
-def parse_yaml_netlist(stream: str) -> tuple[list[Module], list[NamedHyperEdge]]:
+def parse_netlist(filename: str) -> tuple[list[Module], list[NamedHyperEdge]]:
     """
     Parses a netlist from a file (JSON or YAML) or from a string of text (YAML).
     If the text has only one word, it is assumed to be a file name
     :param stream: name of the file or YAML text
     :return: the list of modules and the list of edges.
     """
-    if single_line_string(stream):
-        tree = read_json_yaml_file(stream)
+    if single_line_string(filename):
+        tree = read_json_yaml_file(filename)
     else:
-        tree = read_json_yaml_text(stream)
+        tree = read_json_yaml_text(filename)
 
     assert isinstance(tree, dict), "The YAML root node is not a dictionary"
     modules = list[Module]()
@@ -90,6 +90,9 @@ def parse_yaml_module(name: str, info: dict[str, Any]) -> Module:
             KW.FIXED,
             KW.HARD,
             KW.FLIP,
+            KW.ADJ_CLUSTER,
+            KW.MIB,
+            KW.BOUNDARY,
         ]:
             params[key] = value
         elif key == KW.CENTER:

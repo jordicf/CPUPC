@@ -42,7 +42,7 @@ def parse_yaml_die(
 ) -> tuple[Rectangle, list[Rectangle], Optional[IOsegments]]:
     """
     Parses a die from a file or from a string of text. The string of text
-    can have the form <width>x<height> (e.g., 5.5x10) of be a YAML contents.
+    can have the form <width>x<height> (e.g., 5.5x10) or be a YAML contents.
     :param stream: name of YAML file or string of text
     :return: the bounding box of the die, the list of non-ground rectangles and
              the set of IOsegments

@@ -21,14 +21,25 @@ Python_object = object
 TextIO_String = str | Python_object
 
 
-class StrFileType(Enum):
-    """File type according to its contents"""
+class FileType(Enum):
+    """File type according to its file name suffix"""
 
-    JSON = 1  # It's a JSON string
-    YAML = 2  # It's a YAML string
-    FILE = 3  # It's a file (neither JSON nor YAML)
-    UNKNOWN = 4  # Unknown type
+    JSON = 1  # It's a JSON file
+    YAML = 2  # It's a YAML file
+    UNKNOWN = 3  # Unknown type
 
+def file_type_from_suffix(filename: str) -> FileType:
+    """
+    Determines the file type from its suffix
+    :param filename: the file name
+    :return: the file type
+    """
+    suffix = pathlib.Path(filename).suffix
+    if suffix == ".json":
+        return FileType.JSON
+    if suffix in [".yaml", ".yml"]:
+        return FileType.YAML
+    return FileType.UNKNOWN
 
 def valid_identifier(ident: Any) -> bool:
     """
@@ -87,33 +98,6 @@ def single_line_string(s: str) -> bool:
     return s.count("\n") == 0
 
 
-def string_file_type(s: str) -> StrFileType:
-    """It determines the type of contents of the string it can be a file name,
-    a JSON string or a YAML string. If none of them is identified,
-
-    Args:
-        s (str): input string
-
-    Returns:
-        StrFileType: the type of file corresponding to the file
-    """
-
-    forbidden = ["\n", "{", "["]
-    if all(s.count(c) == 0 for c in forbidden):
-        return StrFileType.FILE  # One line without JSON/YAML characters
-
-    try:
-        # yaml.safe_load(s, yaml.CLoader)
-        yaml.safe_load(s)
-        return StrFileType.YAML
-    except yaml.YAMLError as e:  # noqa: E722
-        try:
-            json.loads(s)
-            return StrFileType.JSON
-        except:  # noqa: E722
-            return StrFileType.UNKNOWN
-
-
 def read_json_yaml_file(filename: str) -> Python_object:
     """
     Reads a JSON or YAML file. It raises an exception in case an error is
@@ -123,19 +107,13 @@ def read_json_yaml_file(filename: str) -> Python_object:
     :return: the Python object
     """
     # Check the type of file by suffix
-    fname = pathlib.Path(filename)
-    str_fname = str(fname)
-    suffix = fname.suffix
+    type = file_type_from_suffix(filename)
+    if type == FileType.UNKNOWN:
+        raise NameError(f"Unknown suffix for file {filename}")
 
-    if suffix == ".json":
-        with open(str_fname, "r") as f:
-            return json.load(f)
+    with open(filename, "r") as f:
+        return json.load(f) if type == FileType.JSON else yaml.safe_load(f)
 
-    if suffix in [".yaml", ".yml"]:
-        with open(str_fname, "r") as f:
-            return yaml.safe_load(f)
-
-    raise NameError(f"Unknown suffix for file {str_fname}")
 
 
 def read_json_yaml_text(text: str, is_json: bool = False) -> Python_object:
@@ -167,7 +145,7 @@ def write_json_yaml(
 
     with open(filename, "w") as stream:  # dump into a file
         if is_json:
-            json.dump(data, stream)
+            json.dump(data, stream, indent=4)
         else:
             yaml.dump(data, stream, default_flow_style=False, indent=4)
         return None

@@ -11,12 +11,20 @@ from typing import Iterable, Iterator, Optional
 from dataclasses import dataclass
 from pprint import pprint
 import portion as p
-from rportion import RPolygon, rclosedopen
+from rportion import RPolygon, rclosedopen, rclosed
 
 # Some auxiliary types
+
+RPoint = tuple[float, float]
+
+# A list of 2D vertices to represent a polygon without holes.
+# The edges are represented by segments between consecutive vertices.
+# The polygon is assumed to be closed (i.e., the last vertex is connected
+# to the first vertex).
+Vertices = list[RPoint]
+
+
 # Tuple to represent a rectangle in the interval [xmin, xmax, ymin, ymax]
-
-
 @dataclass
 class XY_Box:
     xmin: float
@@ -24,6 +32,11 @@ class XY_Box:
     ymin: float
     ymax: float
 
+    @property
+    def center(self) -> RPoint:
+        """Returns the center of the box."""
+        return ((self.xmin + self.xmax) / 2.0, (self.ymin + self.ymax) / 2.0)
+    
     @property
     def width(self) -> float:
         """Returns the width of the box."""
@@ -38,6 +51,21 @@ class XY_Box:
     def area(self) -> float:
         """Returns the area of the box."""
         return self.width * self.height
+
+    @property
+    def is_vertical_edge(self) -> bool:
+        """Returns True if the box is a vertical edge (width == 0)."""
+        return self.xmax == self.xmin
+
+    @property
+    def is_horizontal_edge(self) -> bool:
+        """Returns True if the box is a horizontal edge (height == 0)."""
+        return self.ymax == self.ymin
+
+    @property
+    def is_edge(self) -> bool:
+        """Returns True if the box is an edge (width == 0 or height == 0)."""
+        return self.is_vertical_edge or self.is_horizontal_edge
 
     def dup(self) -> XY_Box:
         """Returns a duplication of the box."""
@@ -141,17 +169,16 @@ def _RPoly2Box(r: RPolygon) -> XY_Box:
     y_interval = r.y_enclosure_interval
     ymin, ymax = y_interval.lower, y_interval.upper
     assert (
-        isinstance(xmin, float)
-        and isinstance(xmax, float)
-        and isinstance(ymin, float)
-        and isinstance(ymax, float)
+        isinstance(xmin, (float, int))
+        and isinstance(xmax, (float, int))
+        and isinstance(ymin, (float, int))
+        and isinstance(ymax, (float, int))
     )
-    return XY_Box(xmin, xmax, ymin, ymax)
+    return XY_Box(float(xmin), float(xmax), float(ymin), float(ymax))
 
 
-class StropDecomposition:
-    """Class to represent the STROP decomposition of a polygon. The STROP
-    can be a subset of the polygon. The STROP is represented by a trunk
+class Strop:
+    """Class to represent the STROP of a polygon represented by a trunk
     (a rectangle) and a set of branches (rectangles) in the four directions.
     The branches are disjoint and do not overlap with the trunk.
     The class provides methods to reduce the number of branches by merging
@@ -171,24 +198,24 @@ class StropDecomposition:
         self._branches = {"N": set(), "S": set(), "E": set(), "W": set()}
 
     def __eq__(self, other: object) -> bool:
-        """Checks equality of two STROP decompositions"""
-        if not isinstance(other, StropDecomposition):
+        """Checks equality of two STROPs"""
+        if not isinstance(other, Strop):
             return NotImplemented
         return self._trunk == other._trunk and all(
             self._branches[d] == other._branches[d] for d in "NSEW"
         )
 
     def __hash__(self) -> int:
-        """Returns a hash value for the STROP decomposition."""
+        """Returns a hash value for the STROP."""
         h = hash(self._trunk)
         for d in "NSEW":
             for b in self._branches[d]:
                 h ^= hash(b)
         return h
 
-    def dup(self) -> StropDecomposition:
-        """Returns a duplication of the StropDecomposition."""
-        c = StropDecomposition(self._ref, self._trunk)
+    def dup(self) -> Strop:
+        """Returns a duplication of the Strop."""
+        c = Strop(self._ref, self._trunk)
         c._branches = copy.deepcopy(self._branches)
         return c
 
@@ -258,14 +285,14 @@ class StropDecomposition:
         """Returns the polygon represented by the STROP decomposition."""
         return FPolygon(self.all_rectangles())
 
-    def reduce(self) -> StropDecomposition:
+    def reduce(self) -> Strop:
         """Reduces the number of branches of the STROP by reducing the
         branches in one of the directions. It selects the direction that
         maximizes the similarity with the original polygon.
-        Returns a new StropDecomposition with the same original area."""
+        Returns a new Strop with the same original area."""
         assert self.num_branches > 0, "No branches to reduce"
         similarity = -1.0
-        best_strop: Optional[StropDecomposition] = None
+        best_strop: Optional[Strop] = None
         for d in "NSEW":
             if len(self._branches[d]) > 0:
                 new_strop = self.reduce_branches(d)
@@ -275,11 +302,11 @@ class StropDecomposition:
         assert best_strop is not None
         return best_strop
 
-    def reduce_branches(self, direction: str) -> StropDecomposition:
+    def reduce_branches(self, direction: str) -> Strop:
         """Reduces branches in the given direction by merging the
         closest pair of branches. In case only one branch remains, the branch
         is removed and the trunk is enlarged to keep the same area.
-        Returns a new StropDecomposition with the same original area."""
+        Returns a new Strop with the same original area."""
         assert direction in "NSEW", f"Invalid direction {direction} in reduce_branches"
         num_branches = len(self._branches[direction])
         assert num_branches > 0, f"No branches in direction {direction} to reduce"
@@ -386,7 +413,7 @@ class FPolygon:
         in [0,1] defined as Area(P1&P2)/Area(P1|P2)."""
         return (self & other).area / (self | other).area
 
-    def generate_all_strops(self) -> Iterator[StropDecomposition]:
+    def generate_all_strops(self) -> Iterator[Strop]:
         """Generates all possible STROP decompositions of the polygon."""
         for r in self._polygon.maximal_rectangles():
             trunk = FPolygon([_RPoly2Box(r)])
@@ -394,7 +421,7 @@ class FPolygon:
             if strop.similarity == 1.0:
                 yield strop
 
-    def calculate_best_strop(self) -> Optional[StropDecomposition]:
+    def calculate_best_strop(self) -> Optional[Strop]:
         """Calculates the best STROP decomposition (the one with the fewer
         number of branches). If no STROP is found, None is returned"""
         # Calculate all strops generated by maximal rectangles
@@ -405,7 +432,7 @@ class FPolygon:
         # In case of ties, the one with the largest trunk area
         return min(all_strops, key=lambda s: (s.num_branches, -s.trunk.area))
 
-    def largest_strop(self, trunk: FPolygon) -> StropDecomposition:
+    def largest_strop(self, trunk: FPolygon) -> Strop:
         """Returns the largest strop included in self that has the
         associated trunk. The trunk is assumed to be a rectangle.
         """
@@ -447,7 +474,7 @@ class FPolygon:
         # with previous branches
         branches.sort(reverse=True, key=lambda r: r[2])
         prev_branches = RPolygon()
-        strop = StropDecomposition(self, _RPoly2Box(trunk._polygon))
+        strop = Strop(self, _RPoly2Box(trunk._polygon))
 
         for br in branches:
             new_b = br[0] - prev_branches
@@ -456,3 +483,102 @@ class FPolygon:
             prev_branches |= new_b
 
         return strop
+
+
+    def vertices(self) -> Vertices:
+        """Converts a polygon into a sequence of vertices.
+        The polygon represents a simple polygon (without holes).
+        An exception is raised if the polygon is not simple."""
+
+        boundary = self._polygon.boundary()
+        edges = list(boundary.rectangle_partitioning())
+
+        assert len(edges) >= 4, "A polygon must have at least 4 edges"
+
+        # Create the contour as a mapping from each vertex to its
+        # adjacent vertices (each vertex should have 2 adjacent vertices)
+        cont = dict[RPoint, set[RPoint]]()
+        for e in edges:
+            box = _RPoly2Box(e)
+            if box.is_vertical_edge:
+                p1 = (box.xmin, box.ymin)
+                p2 = (box.xmin, box.ymax)
+            elif box.is_horizontal_edge:
+                p1 = (box.xmin, box.ymin)
+                p2 = (box.xmax, box.ymin)
+            else:
+                assert False, "Internal error: neither vertical nor horizontal edge"
+
+            if p1 not in cont:
+                cont[p1] = set()
+            if p2 not in cont:
+                cont[p2] = set()
+            cont[p1].add(p2)
+            cont[p2].add(p1)
+            
+        # Sanity check that all vertices have degree 2
+        for v, adj in cont.items():
+            assert len(adj) == 2, f"Vertex {v} has degree {len(adj)} != 2"
+
+        # Let just make it deterministic. Let us pick the lowest-leftmost vertex as start
+        # The second vertex will be the adjacent one with lowest-leftmost coordinates
+        start_vertex = min(cont.keys(), key=lambda p: (p[0], p[1]))
+        vertices: Vertices = [start_vertex]
+        second_vertex = max(cont[start_vertex], key=lambda p: (p[1], p[0]))
+        cont[start_vertex].remove(second_vertex)
+        cont[second_vertex].remove(start_vertex)
+        vertices.append(second_vertex)
+        current = second_vertex
+        while True:
+            assert current is not None
+            next_vertices = cont[current]
+            if len(next_vertices) == 0:
+                assert vertices[0] == vertices[-1], "Not a simple polygon"
+                vertices.pop()  # Remove the last vertex (equal to the first)
+                break
+            new_vertex = next_vertices.pop()
+            cont[new_vertex].remove(current)
+            vertices.append(new_vertex)
+            current = new_vertex
+
+        # Check that all points have been visited
+        assert len(vertices) == len(cont), "Not a simple polygon"
+        return vertices
+
+
+def vertices2polygon(vertices: Iterable[RPoint]) -> FPolygon:
+    """Converts a set of vertices into a simple FPolygon.
+    The vertices represent a simple polygon (without holes).
+    Based on the paper A Polygon-to-Rectangle Conversion Algorithm
+    by Kevin D. Gourley and Douglas M. Green."""
+
+    v = set(vertices)
+    rectangles: list[XY_Box] = []
+
+    while v:
+        # Find the two leftmost vertices with minimum y coordinate
+        pk = min(v, key=lambda p: (p[1], p[0]))
+        v.remove(pk)
+        pl = min(v, key=lambda p: (p[1], p[0]))
+        v.remove(pl)
+        assert pk[1] == pl[1], "Sanity check: same y coordinate"
+        # Points in the [pk.x,pl.x] interval with y > pk.y
+        new_v = {p for p in v if pk[0] <= p[0] <= pl[0] and p[1] > pk[1]}
+        # Pick the point with minimum y coordinate
+        pm = min(new_v, key=lambda p: (p[1], p[0]))
+        rectangles.append(
+            XY_Box(pk[0], pl[0], pk[1], pm[1])
+        )
+        # Update the vertex set
+        pkm = (pk[0], pm[1])
+        plm = (pl[0], pm[1])
+        if pkm in v:
+            v.remove(pkm)
+        else:
+            v.add(pkm)
+        if plm in v:
+            v.remove(plm)
+        else:
+            v.add(plm)
+
+    return FPolygon(rectangles)
