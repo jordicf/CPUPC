@@ -1,23 +1,28 @@
 Modules: {
     A: {
       area: 1,
-      rectangles: [[8.5, 7.5, 3, 5], [5.5, 9, 3, 2], [9, 4, 2, 2]]
+      rectangles: [[8.5, 7.5, 3, 5], [5.5, 9, 3, 2], [9, 4, 2, 2]],
+      boundary: top_left
     },
     B: {
       area: 1,
-      rectangles: [[2, 8, 4, 4]]
+      rectangles: [[2, 8, 4, 4]],
+      mib: mib_B
     },
     C: {
       rectangles: [[1.5, 3, 3, 6], [4, 1, 2, 2]],
-      fixed: true
+      fixed: true,
+      adj_cluster: cl
     },
     D: {
       area: 1,
       rectangles: [[5.5, 5, 5, 5]],
+      adj_cluster: cl
     },
     E: {
       rectangles: [[8,1,4,2]],
-      hard: true
+      hard: true,
+      mib: mib_B,
     },
     X: {
       length: 0,

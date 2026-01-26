@@ -28,7 +28,8 @@ TOOLS = {
     "inipoints": "tools.inipoints.inipoints",
     "inirects": "tools.inirects.inirects",
     "all": "tools.all.all",
-    "floor_designer": "tools.floor_designer.floor_designer"
+    "floor_designer": "tools.floor_designer.floor_designer",
+    "readfloorset": "tools.readfloorset.readfloorset",
 }
 
 

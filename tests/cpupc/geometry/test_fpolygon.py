@@ -4,8 +4,13 @@
 # (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 import unittest
+import rportion as rp
 from pprint import pprint
-from cpupc.geometry.fpolygon import FPolygon, XY_Box
+from cpupc.geometry.fpolygon import (
+    FPolygon,
+    XY_Box,
+    vertices2polygon,
+)
 
 
 class TestFPolygon(unittest.TestCase):
@@ -109,6 +114,69 @@ class TestFPolygon(unittest.TestCase):
             i += 1
 
         self.assertAlmostEqual(new_strop.similarity, 0.6538, 3)
+
+
+class TestVertices(unittest.TestCase):
+
+    def setUp(self) -> None:
+        # A simple polygon
+        self.p1 = FPolygon([
+            XY_Box(0, 4, 2, 5),
+            XY_Box(2, 4, 2, 7),
+            XY_Box(3, 6, 0, 2),
+            XY_Box(4, 6, 0, 8),
+        ])
+        
+        self.solution1 = [
+            (0.0, 2.0),
+            (0.0, 5.0),
+            (2.0, 5.0),
+            (2.0, 7.0),
+            (4.0, 7.0),
+            (4.0, 8.0),
+            (6.0, 8.0),
+            (6.0, 0.0),
+            (3.0, 0.0),
+            (3.0, 2.0),
+        ]
+
+        # A disconnected polygon
+        self.p2 = FPolygon([
+            XY_Box(0, 2, 0, 2),
+            XY_Box(3, 5, 3, 5),
+        ])
+
+        # A polygon with a hole
+        self.p3 = FPolygon([
+            XY_Box(0, 1, 0, 3),
+            XY_Box(2, 3, 0, 3),
+            XY_Box(0, 3, 0, 1),
+            XY_Box(0, 3, 2, 3),
+        ])
+
+        # A complex polygon
+        self.p4 = FPolygon([
+            XY_Box(1, 4, 6, 7),
+            XY_Box(0, 2, 2, 4),
+            XY_Box(2, 4, 2, 6),
+            XY_Box(4, 7, 3, 5),
+            XY_Box(3, 5, 0, 2),
+            XY_Box(5, 6, 1, 2),
+            XY_Box(4, 5, 0, 3),
+        ])
+
+    def test_polygon2vertices(self) -> None:
+        self.assertEqual(self.p1.vertices(), self.solution1)
+        self.assertRaises(Exception, self.p2.vertices)
+        self.assertRaises(Exception, self.p3.vertices)
+
+    def test_vertices2polygon(self) -> None:
+        new_poly = vertices2polygon(self.solution1)
+        self.assertEqual(new_poly, self.p1)
+        
+        vertices = self.p4.vertices()
+        new_poly = vertices2polygon(vertices)
+        self.assertEqual(new_poly, self.p4)
 
 
 if __name__ == "__main__":

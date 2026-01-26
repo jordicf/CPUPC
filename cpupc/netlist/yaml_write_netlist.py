@@ -4,7 +4,7 @@
 # (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 from typing import Any
-from .module import Module
+from .module import Module, ModuleParams
 from .netlist_types import HyperEdge, NamedHyperEdge
 from ..geometry.geometry import Rectangle
 from ..utils.keywords import KW
@@ -34,13 +34,14 @@ def dump_yaml_edges(edges: list[HyperEdge]) -> list[list[str | float]]:
     return out_edges
 
 
-def dump_yaml_module(module: Module) -> dict:
+def dump_yaml_module(module: Module) -> dict[str, Any]:
     """
     Generates a data structure for the module that can be dumped in YAML
     :param module: a module
     :return: the data structure
     """
-    info = dict[str, float | bool | list[Any] | dict[str, Any]]()
+
+    info = dict[str, Any]()
 
     # Dump all the information
 
@@ -71,6 +72,17 @@ def dump_yaml_module(module: Module) -> dict:
                 module.aspect_ratio.max_wh,
             ]
 
+    # Clusters and boundary constraints
+    if module.cluster is not None:
+        info[KW.ADJ_CLUSTER] = module.cluster
+
+    if module.mib is not None:
+        info[KW.MIB] = module.mib
+        
+    if module.boundary is not None:
+        info[KW.BOUNDARY] = module.boundary
+
+    # Rectangles
     if module.num_rectangles > 0:
         info[KW.RECTANGLES] = dump_yaml_rectangles(module.rectangles)
 

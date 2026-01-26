@@ -8,12 +8,53 @@ Modules of a netlist
 """
 
 import math
-from typing import Optional, Any, TypedDict, NotRequired
+from typing import Optional, Any
 from cpupc.geometry.geometry import Point, Shape, AspectRatio, Rectangle, create_strop
 from cpupc.utils.keywords import KW
 from cpupc.utils.utils import valid_identifier, is_number
 
-_ModuleParams = bool | Point | AspectRatio | float | dict[str, float] | list[Rectangle]
+ModuleParams = (
+    bool | str | Point | AspectRatio | float | dict[str, float] | list[Rectangle]
+)
+
+
+class Boundary:
+    TOP = "top"
+    BOTTOM = "bottom"
+    LEFT = "left"
+    RIGHT = "right"
+    TOP_LEFT = "top_left"
+    TOP_RIGHT = "top_right"
+    BOTTOM_LEFT = "bottom_left"
+    BOTTOM_RIGHT = "bottom_right"
+
+    # Constraints and codes, according to the floorset encoding
+    _constraints = {
+        TOP: 4,
+        BOTTOM: 8,
+        LEFT: 1,
+        RIGHT: 2,
+        TOP_LEFT: 5,
+        TOP_RIGHT: 6,
+        BOTTOM_LEFT: 9,
+        BOTTOM_RIGHT: 10,
+    }
+
+    @staticmethod
+    def valid(constraint: str) -> bool:
+        """Checks whether a constraint is valid"""
+        return constraint in Boundary._constraints
+
+    @staticmethod
+    def code(constraint: str) -> int:
+        return Boundary._constraints[constraint]
+    
+    @staticmethod
+    def from_code(code: int) -> Optional[str]:
+        for key, value in Boundary._constraints.items():
+            if value == code:
+                return key
+        return None
 
 
 class Module:
@@ -25,6 +66,9 @@ class Module:
     _center: Optional[Point]  # Center of the module (if defined)
     _aspect_ratio: Optional[AspectRatio]  # interval of the aspect ratio
     _iopin: bool  # It is an IO pin?
+    _cluster: Optional[str]  # Cluster name (for adjacent polygons, if any)
+    _mib: Optional[str]  # MIB cluster name (for multiple instances, if any)
+    _boundary: Optional[str]  # Boundary constraint of the module (if any)
     _hard: bool  # Must be a hard module (but movable if not fixed)
     _fixed: bool  # Must be fixed in the layout
     _flip: bool  # May be flipped (only for hard modules, not fixed)
@@ -42,17 +86,21 @@ class Module:
     _area_rectangles: float
     _pin_length: float  # Length of the IO pin (negative if not defined)
 
-    def __init__(self, name: str, **kwargs: _ModuleParams) -> None:
+    def __init__(self, name: str, **kwargs: ModuleParams) -> None:
         """
         Constructor
         :param kwargs: name (str), center (Point), aspect_ratio (AspectRatio),
                        area (float or dict), hard (boolean), fixed (boolean),
-                       flip (boolean), IO pin (boolean)
+                       flip (boolean), IO pin (boolean), cluster (str), mib (str),
+                       boundary (str), rectangles (list of Rectangle)
         """
         self._name = name
         self._center = None
         self._aspect_ratio = None
         self._iopin = False
+        self._cluster = None
+        self._mib = None
+        self._boundary = None
         self._hard = False
         self._fixed = False
         self._flip = False
@@ -65,7 +113,7 @@ class Module:
         self._read_parameters(name, kwargs)
         self._check_consistency(kwargs)
 
-    def _read_parameters(self, name: str, kwargs: dict[str, _ModuleParams]) -> None:
+    def _read_parameters(self, name: str, kwargs: dict[str, ModuleParams]) -> None:
         """Parsers the information of a module"""
 
         # Check the name
@@ -85,14 +133,14 @@ class Module:
                     assert isinstance(
                         value, Point
                     ), f"Module {name}: incorrect point associated to the center"
-                    self._center = value
+                    self.center = value
                 case KW.ASPECT_RATIO:
                     assert (
                         isinstance(value, AspectRatio)
                         and 0 <= value.min_wh <= 1.0
                         and value.max_wh >= 1.0
                     ), f"Module {name}: incorrect aspect ratio"
-                    self._aspect_ratio = value
+                    self.aspect_ratio = value
                 case KW.AREA:
                     assert isinstance(value, (int, float, dict))
                     self._area_regions = self._read_region_area(value)
@@ -103,16 +151,16 @@ class Module:
                     self._pin_length = float(value)
                 case KW.FIXED:
                     assert isinstance(value, bool)
-                    self._fixed = self._hard = value
+                    self.is_fixed = self.is_hard = value
                 case KW.HARD:
                     assert (
                         KW.FIXED not in kwargs
                     ), f"Module {name}: {KW.FIXED} and {KW.HARD} are mutually exclusive"
                     assert isinstance(value, bool)
-                    self._hard = value
+                    self.is_hard = value
                 case KW.FLIP:
                     assert isinstance(value, bool)
-                    self._flip = value
+                    self.is_flip = value
                 case KW.IO_PIN:
                     assert (
                         KW.AREA not in kwargs
@@ -124,7 +172,27 @@ class Module:
                         KW.FLIP not in kwargs
                     ), f"Module {name}: IO pin cannot have flip attribute"
                     assert isinstance(value, bool)
-                    self._iopin = value
+                    self.is_iopin = value
+                case KW.ADJ_CLUSTER:
+                    assert isinstance(value, str)
+                    assert valid_identifier(
+                        value
+                    ), f"Module {name}: invalid cluster identifier"
+                    self.cluster = value
+                case KW.MIB:
+                    assert isinstance(value, str)
+                    assert valid_identifier(
+                        value
+                    ), f"Module {name}: invalid MIB identifier"
+                    self.mib = value
+                case KW.BOUNDARY:
+                    assert isinstance(
+                        value, str
+                    ), f"Module {name}: edge constraint must be a string"
+                    assert Boundary.valid(
+                        value
+                    ), f"Module {name}: invalid edge constraint {value}"
+                    self.boundary = value
                 case KW.RECTANGLES:
                     assert isinstance(value, list)
                     for r in value:
@@ -226,7 +294,7 @@ class Module:
 
     # Getter and setter for min_shape
     @property
-    def aspect_ratio(self) -> AspectRatio | None:
+    def aspect_ratio(self) -> Optional[AspectRatio]:
         return self._aspect_ratio
 
     @aspect_ratio.setter
@@ -240,6 +308,30 @@ class Module:
     @is_iopin.setter
     def is_iopin(self, value: bool) -> None:
         self._iopin = value
+
+    @property
+    def cluster(self) -> Optional[str]:
+        return self._cluster
+
+    @cluster.setter
+    def cluster(self, value: Optional[str]) -> None:
+        self._cluster = value
+
+    @property
+    def mib(self) -> Optional[str]:
+        return self._mib
+
+    @mib.setter
+    def mib(self, value: Optional[str]) -> None:
+        self._mib = value
+
+    @property
+    def boundary(self) -> Optional[str]:
+        return self._boundary
+
+    @boundary.setter
+    def boundary(self, value: Optional[str]) -> None:
+        self._boundary = value
 
     @property
     def is_hard(self) -> bool:
@@ -267,6 +359,10 @@ class Module:
     @property
     def flip(self) -> bool:
         return self._flip
+
+    @flip.setter
+    def flip(self, value: bool) -> None:
+        self._flip = value
 
     # Getters for area
     def area(self, region: Optional[str] = None) -> float:

@@ -65,6 +65,10 @@ Here is the list of possible attributes:
 * `fixed`: indicates whether the module must be in a fixed location. Example: `fixed: true`. The default value is `false`. A fixed module is assumed to be `hard`.
 * `flip`: indicates whether the module can be flipped horizontally or vertically.
   Example: `flip: true`. The default value is `false`. Only non-fixed hard modules can be flipped.
+* `adj_cluster`: indicates the name of a cluster of modules that must be
+  adjacent.
+* `mib`: indicates the name of an MIB (Multiply-Instantiated Block), meaning that all modules of the same MIB must have the same shape.
+* `boundary`: indicates that the module has boundary constraint
 * `rectangles`: a list of rectangles that determine the floorplan of the module. See below.
 
 Here is an example with some attributes:
@@ -77,12 +81,37 @@ Here is an example with some attributes:
   },
 
   M2: { # Module with one fixed rectangle
-    rectangles: [60, 75, 10, 12], # Center at (60, 75), width: 10, height:12
+    rectangles: [60, 75, 10, 12], # Center at (60, 75), width: 10, height: 12,
     fixed: true
   },
 
   M3: { # L-shaped module with two rectangles
     rectangles: [[25, 45, 30, 50], [50, 30, 20, 20]]
+  }
+~~~
+
+### Module clusters
+
+Modules can also be clusterized for different reasons. Two examples:
+
+* An MIB (Multiply-Instantiated Blocks) is a block that can have multiple
+  instances in the floorplan. For example, the modules `CPU1`, `CPU2`, `CPU3`,
+  and `CPU4` may be multiple instances of the module `CPU`, meaning that all
+  of them must have the same shape.
+
+* Some modules may need to be physically adjacent. This can be specified by assigning them to the same adjacency cluster.
+
+Clustering is specified by adding attributes to modules and identifying
+clusters with names. Currently, the attributes `adj_cluster` and `mib` are supported. Here is an example:
+
+~~~yaml
+  ethernet: {
+    area: 80,
+    adj_cluster: communication # belongs to the communication cluster
+  },
+
+  CPU1: {
+    mib: CPU # CPU1 is an instance of CPU
   }
 ~~~
 
@@ -125,6 +154,32 @@ interpreted as _preferred_ regions where a module would like to be located and t
 used to define the initial point of a mathematical model. At the end of a complete
 floorplanning process, a legal configuration might be required. The constraints for legalization may
 be different depending on the context.
+
+### Module boundary constraint
+
+Some modules may need to be adjacent to some of the boundaries of the
+of the floorplan. Every module can have a `boundary` attribute specifying the constraint.
+The possible values of the boundary constraints are the following:
+`top`, `bottom`, `left`, `right`, `top_left`, `top_right`, `bottom_left` and
+`bottom_right`.
+
+Example:
+
+~~~yaml
+  M1: {
+    area: 20,
+    boundary: top_left
+  },
+
+  M2: {
+    area: 35,
+    boundary: right
+  }
+
+  M3: {
+    area: 25  # No boundary constraint
+  }
+~~~
 
 ## I/O pins
 

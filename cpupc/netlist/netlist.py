@@ -11,8 +11,8 @@ import math
 from itertools import combinations
 from typing import Optional, Iterator, Iterable
 from cpupc.netlist.module import Module
-from cpupc.netlist.netlist_types import HyperEdge, NamedHyperEdge
-from cpupc.netlist.yaml_read_netlist import parse_yaml_netlist
+from cpupc.netlist.netlist_types import HyperEdge, NamedHyperEdge, ModuleClusters
+from cpupc.netlist.yaml_read_netlist import parse_netlist
 from cpupc.netlist.yaml_write_netlist import dump_yaml_modules, dump_yaml_edges
 from cpupc.geometry.geometry import Rectangle, Point
 from cpupc.utils.keywords import KW
@@ -36,6 +36,8 @@ class Netlist:
     _edges: list[HyperEdge]  # List of hyperedges, with references to modules
     _name2module: dict[str, Module]  # Map from module names to modules
     _rectangles: Optional[list[Rectangle]]  # List of rectangles
+    _clusters: ModuleClusters  # Clusters of modules (adjacent polygons)
+    _mib_clusters: ModuleClusters  # MIB clusters of modules (multiple instances)
 
     def __init__(self, stream: str):
         """
@@ -44,10 +46,11 @@ class Netlist:
         :param stream: name of the file or the YAML string
         """
 
-        self._modules, _named_edges = parse_yaml_netlist(stream)
+        self._modules, _named_edges = parse_netlist(stream)
         self._name2module = {b.name: b for b in self._modules}
         self._create_hyperedges(_named_edges)
         self._create_rectangles()
+        self._create_clusters()
 
     def _create_hyperedges(self, hyper_edges: list[NamedHyperEdge]) -> None:
         """Defines the hyperedges of the netlist"""
@@ -107,6 +110,16 @@ class Netlist:
             self._create_rectangles()
         assert self._rectangles is not None
         return self._rectangles
+
+    @property
+    def adjacency_clusters(self) -> ModuleClusters:
+        """Clusters of modules of the netlist"""
+        return self._clusters
+
+    @property
+    def mib_clusters(self) -> ModuleClusters:
+        """MIB Clusters of modules of the netlist"""
+        return self._mib_clusters
 
     def create_squares(self) -> list[Module]:
         """
@@ -241,6 +254,18 @@ class Netlist:
         assert all(
             not m.flip or m.has_strop for m in self.modules
         ), "Not all flip modules have a STROP"
+
+    def _create_clusters(self) -> None:
+        """
+        Creates the clusters and MIB clusters of the netlist
+        """
+        self._clusters = ModuleClusters()
+        self._mib_clusters = ModuleClusters()
+        for m in self.modules:
+            if m.cluster is not None:
+                self._clusters.add_module_to_cluster(m.cluster, m)
+            if m.mib is not None:
+                self._mib_clusters.add_module_to_cluster(m.mib, m)
 
     def write_yaml(self, filename: Optional[str] = None) -> Optional[str]:
         """
