@@ -12,7 +12,7 @@ from itertools import combinations
 from typing import Set, Deque, Any, Optional
 from dataclasses import dataclass
 
-from .yaml_parse_die import parse_yaml_die, IOsegments
+from .yaml_parse_die import parse_die, IOsegments
 from cpupc.geometry.geometry import (
     Shape,
     Rectangle,
@@ -77,7 +77,7 @@ class Die:
         """
         regions: list[Rectangle]
         self._netlist = netlist
-        self._die, regions, self._io_segments = parse_yaml_die(stream)
+        self._die, regions, self._io_segments = parse_die(stream)
         self._epsilon = min(self.width, self.height) * 10e-12
         if not Rectangle.epsilon_defined():
             Rectangle.set_epsilon(self._epsilon)

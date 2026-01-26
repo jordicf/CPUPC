@@ -9,6 +9,7 @@ import argparse
 import pathlib
 from typing import Any, Optional
 from .readnetlist import read_floorset_netlist
+from cpupc.utils.keywords import KW
 from cpupc.utils.utils import (
     write_json_yaml,
     file_type_from_suffix,
@@ -34,7 +35,7 @@ def parse_options(
     )
     parser.add_argument("--data", required=True, help="input file (data)")
     parser.add_argument("--label", required=True, help="input file (label)")
-    parser.add_argument("--netlist", required=True, help="output netlist)")
+    parser.add_argument("--netlist", required=True, help="output netlist")
     parser.add_argument("--die", help="output die file (optional)")
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
     return vars(parser.parse_args(args))
@@ -46,17 +47,26 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
 
     # Before doing anything, check output file suffix
     netlist_type = file_type_from_suffix(options["netlist"])
-    assert netlist_type != FileType.UNKNOWN, "Unknown suffix for netlist file"
-    if options["die"] is not None:
-        assert (
-            file_type_from_suffix(options["die"]) != FileType.UNKNOWN
-        ), "Unknown suffix for die file"
 
-    netlist = read_floorset_netlist(
+    assert netlist_type != FileType.UNKNOWN, "Unknown suffix for netlist file"
+    die_type = FileType.UNKNOWN
+    if options["die"] is not None:
+        die_type = file_type_from_suffix(options["die"])
+        assert die_type != FileType.UNKNOWN, "Unknown suffix for die file"
+
+    netlist, width, height = read_floorset_netlist(
         options["data"], options["label"], options["verbose"]
     )
 
     write_json_yaml(netlist, netlist_type == FileType.JSON, options["netlist"])
+
+    if options["die"] is not None:
+        die: Python_object = {
+            KW.WIDTH: width,
+            KW.HEIGHT: height
+        }
+        die_type = file_type_from_suffix(options["die"])
+        write_json_yaml(die, die_type == FileType.JSON, options["die"])
 
 
 if __name__ == "__main__":

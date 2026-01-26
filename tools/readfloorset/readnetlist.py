@@ -13,13 +13,13 @@ from cpupc.geometry.fpolygon import RPoint, vertices2polygon
 
 def read_floorset_netlist(
     data_file: str, label_file: str, verbose: bool = False
-) -> Python_object:
+) -> tuple[Python_object, float, float]:
     """
     Reads a netlist in the floorset format
     :param netlist_file: input netlist file
     :param floorplan_file: floorplan file
     :param verbose: verbose output
-    :return: the netlist
+    :return: the netlist and the width and height of the die
     """
 
     n = torch.load(data_file)
@@ -57,12 +57,18 @@ def read_floorset_netlist(
             info[KW.BOUNDARY] = constraint
         dict_modules[mod_name] = info
 
-    # Read the pins
+    # Read the pins and derive the boundaries of the die
+    xmin = ymin = float("inf")
+    xmax = ymax = float("-inf")
     for p in range(npins):
         pin_name = f"P_{p}"
         info_pin: dict[str, Any] = dict()
         info_pin[KW.IO_PIN] = True
         x, y = float(pin_pos[p][0]), float(pin_pos[p][1])
+        xmin = min(xmin, x)
+        xmax = max(xmax, x)
+        ymin = min(ymin, y)
+        ymax = max(ymax, y)
         info_pin[KW.RECTANGLES] = [x, y, 0, 0]
         info_pin[KW.FIXED] = True
         dict_modules[pin_name] = info_pin
@@ -86,7 +92,7 @@ def read_floorset_netlist(
     # Extract rectangles for each module and calculate the strop
     for i in range(nmodules):
         mod_name = f"M_{i}"
-        vertices: set[RPoint] = {(float(x),float(y)) for x,y in rectangles[i]}
+        vertices: set[RPoint] = {(float(x), float(y)) for x, y in rectangles[i]}
         polygon = vertices2polygon(vertices)
         strop = polygon.calculate_best_strop()
         assert strop is not None, f"Cannot calculate strop for module {mod_name}"
@@ -98,7 +104,11 @@ def read_floorset_netlist(
             list_rectangles.append([center[0], center[1], width, height])
         dict_modules[mod_name][KW.RECTANGLES] = list_rectangles
 
-    return {
-        KW.MODULES: dict_modules,
-        KW.NETS: list_nets,
-    }
+    return (
+        {
+            KW.MODULES: dict_modules,
+            KW.NETS: list_nets,
+        },
+        xmax - xmin,
+        ymax - ymin,
+    )
