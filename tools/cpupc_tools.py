@@ -30,6 +30,7 @@ TOOLS = {
     "all": "tools.all.all",
     "floor_designer": "tools.floor_designer.floor_designer",
     "readfloorset": "tools.readfloorset.readfloorset",
+    "writefloorset": "tools.writefloorset.writefloorset",
 }
 
 

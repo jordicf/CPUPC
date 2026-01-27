@@ -12,13 +12,12 @@ from cpupc.geometry.fpolygon import RPoint, vertices2polygon
 
 
 def read_floorset_netlist(
-    data_file: str, label_file: str, verbose: bool = False
+    data_file: str, label_file: str
 ) -> tuple[Python_object, float, float]:
     """
     Reads a netlist in the floorset format
     :param netlist_file: input netlist file
     :param floorplan_file: floorplan file
-    :param verbose: verbose output
     :return: the netlist and the width and height of the die
     """
 

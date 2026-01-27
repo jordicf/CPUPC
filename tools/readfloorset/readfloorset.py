@@ -37,7 +37,6 @@ def parse_options(
     parser.add_argument("--label", required=True, help="input file (label)")
     parser.add_argument("--netlist", required=True, help="output netlist")
     parser.add_argument("--die", help="output die file (optional)")
-    parser.add_argument("-v", "--verbose", action="store_true", help="verbose output")
     return vars(parser.parse_args(args))
 
 
@@ -55,7 +54,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
         assert die_type != FileType.UNKNOWN, "Unknown suffix for die file"
 
     netlist, width, height = read_floorset_netlist(
-        options["data"], options["label"], options["verbose"]
+        options["data"], options["label"]
     )
 
     write_json_yaml(netlist, netlist_type == FileType.JSON, options["netlist"])

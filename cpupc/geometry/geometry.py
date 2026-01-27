@@ -360,6 +360,26 @@ class Rectangle:
         self._shape = shape
 
     @property
+    def xmin(self) -> float:
+        """Returns the minimum x coordinate of the rectangle"""
+        return self.center.x - self.shape.w / 2
+    
+    @property
+    def xmax(self) -> float:
+        """Returns the maximum x coordinate of the rectangle"""
+        return self.center.x + self.shape.w / 2
+    
+    @property
+    def ymin(self) -> float:
+        """Returns the minimum y coordinate of the rectangle"""
+        return self.center.y - self.shape.h / 2
+    
+    @property
+    def ymax(self) -> float:
+        """Returns the maximum y coordinate of the rectangle"""
+        return self.center.y + self.shape.h / 2
+    
+    @property
     def is_line(self) -> bool:
         """Indicates whether the rectangle is a line (width or height is zero)"""
         return self._shape.w == 0 or self._shape.h == 0

@@ -69,6 +69,24 @@ class HyperEdge:
             wire_length += sqrt(v & v)
         return wire_length * self.weight
 
+    @property
+    def hpwl(self) -> float:
+        """
+        Returns the HPWL (Half-Perimeter Wire Length) of the hyperedge.
+        The HPWL is the half-perimeter of the bounding box enclosing all module
+        centers, multiplied by the hyperedge weight.
+        """
+        assert all(
+            m.center is not None for m in self.modules
+        ), "Some module has no center"
+        # Redudant check (will never happen) for type checking
+        min_x = min(m.center.x if m.center is not None else 0 for m in self.modules)
+        max_x = max(m.center.x if m.center is not None else 0 for m in self.modules)
+        min_y = min(m.center.y if m.center is not None else 0 for m in self.modules)
+        max_y = max(m.center.y if m.center is not None else 0 for m in self.modules)
+        hpwl = (max_x - min_x) + (max_y - min_y)
+        return hpwl * self.weight
+
     def __repr__(self) -> str:
         names = [b.name for b in self.modules]
         if self.weight == 1:
@@ -103,7 +121,7 @@ class ModuleClusters:
             cluster_name in self._clusters
         ), f"Cluster {cluster_name} does not exist in the netlist"
         return self._clusters[cluster_name]
-    
+
     def get_clusters(self) -> Iterator[set[Module]]:
         """Returns an iterator over the clusters."""
         for cluster in self._clusters.values():
