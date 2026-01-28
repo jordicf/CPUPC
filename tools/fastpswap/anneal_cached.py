@@ -41,6 +41,7 @@ def simulated_annealing(
 
     # Net properties and connectivity
     n_nets = len(net.nets)
+    n_external_nets: int = net._external_nets
     net_weights = np.array([n.weight for n in net.nets], dtype=np.float64)
     net_hpwls = np.zeros(n_nets, dtype=np.float64)
 
@@ -65,8 +66,8 @@ def simulated_annealing(
     # Fast simulated annealing using Numba JIT compilation
     jit_simulated_annealing(
         point_x, point_y, point_nets_indices, point_nets_offsets,
-        net_weights, net_hpwls, net_points_indices, net_points_offsets,
-        movable,
+        net_weights, net_hpwls, n_external_nets, net_points_indices, 
+        net_points_offsets, movable,
         n_swaps, patience, target_acceptance, temp_factor, seed, verbose
     )
 
@@ -85,6 +86,7 @@ def jit_simulated_annealing(
     point_nets_offsets: np.ndarray,
     net_weights: np.ndarray,
     net_hpwls: np.ndarray,
+    external_nets: int,
     net_points_indices: np.ndarray,
     net_points_offsets: np.ndarray,
     movable: np.ndarray,
@@ -111,6 +113,7 @@ def jit_simulated_annealing(
 
     # Compute total hpwl of the netlist
     total_hpwl: float = np.sum(net_hpwls)
+    total_internal_hpwl: float = np.sum(net_hpwls[external_nets:])
 
     if verbose:
         print("Running JIT-compiled simulated annealing...")
@@ -124,14 +127,15 @@ def jit_simulated_annealing(
     temp: float = _find_best_temperature(
         n_swaps, target_acceptance,
         point_x, point_y, point_nets_indices, point_nets_offsets,
-        net_weights, net_hpwls, net_points_indices, net_points_offsets,
-        movable
+        net_weights, net_hpwls, external_nets, net_points_indices, 
+        net_points_offsets, movable
     )
 
     # Initial solution
     best_x = point_x.copy()
     best_y = point_y.copy()
     best_hpwl = current_hpwl = total_hpwl
+    best_hpwl_internal = current_hpwl_internal = total_internal_hpwl
 
     if verbose:
         print("Initially: Temperature", temp, "HPWL", best_hpwl)
@@ -147,18 +151,21 @@ def jit_simulated_annealing(
         for _ in range(n_swaps):
             idx1, idx2 = _pick_two_randomly(movable)
             
-            delta_hpwl = _swap_points(
+            delta_hpwl, delta_hpwl_internal = _swap_points(
                 idx1, idx2,
                 point_x, point_y, point_nets_indices, point_nets_offsets,
-                net_weights, net_hpwls, net_prev_hpwls, net_points_indices, net_points_offsets
+                net_weights, net_hpwls, net_prev_hpwls, external_nets, 
+                net_points_indices, net_points_offsets
             )      
 
             if delta_hpwl < 0 or np.random.random() < np.exp(-delta_hpwl / temp):
                 current_hpwl += delta_hpwl
+                current_hpwl_internal += delta_hpwl_internal
 
                 if current_hpwl < best_hpwl:
                     no_improvement = -1
                     best_hpwl = current_hpwl
+                    best_hpwl_internal = current_hpwl_internal
                     best_x = point_x.copy()
                     best_y = point_y.copy()
             else:
@@ -186,7 +193,19 @@ def jit_simulated_annealing(
                 "Best Avg", best_avg,
                 "Best", best_hpwl,
             )
+        # decrease temperature and increase internal net weights
         temp = temp * temp_factor
+        net_weights[external_nets:] /= temp_factor
+        net_hpwls[external_nets:] /= temp_factor
+
+        # update cost of best and current solutions
+        current_hpwl_external = current_hpwl - current_hpwl_internal
+        current_hpwl_internal /= temp_factor
+        current_hpwl = current_hpwl_external + current_hpwl_external
+
+        best_hpwl_external = best_hpwl - best_hpwl_internal
+        best_hpwl_internal /= temp_factor
+        best_hpwl = best_hpwl_external + best_hpwl_external
 
     # Restore best solution
     for i in range(len(point_x)):
@@ -204,6 +223,7 @@ def _find_best_temperature(
     point_nets_offsets: np.ndarray,
     net_weights: np.ndarray,
     net_hpwls: np.ndarray,
+    external_nets: int,
     net_points_indices: np.ndarray,
     net_points_offsets: np.ndarray,
     movable: np.ndarray,
@@ -220,10 +240,11 @@ def _find_best_temperature(
     for _ in range(nswaps):
         idx1, idx2 = _pick_two_randomly(movable)
         
-        delta = _swap_points(
+        delta, _ = _swap_points(
             idx1, idx2,
             point_x, point_y, point_nets_indices, point_nets_offsets,
-            net_weights, net_hpwls, net_prev_hpwls, net_points_indices, net_points_offsets
+            net_weights, net_hpwls, net_prev_hpwls, external_nets, 
+            net_points_indices, net_points_offsets
         )
         cost.append(abs(delta))
         
@@ -325,10 +346,13 @@ def _swap_points(
     net_weights: np.ndarray,
     net_hpwls: np.ndarray,
     net_prev_hpwls: np.ndarray,
+    external_nets: int,
     net_points_indices: np.ndarray,
     net_points_offsets: np.ndarray,
-) -> float:
-    """Swap two points and return the change in total HPWL."""
+) -> tuple[float, float]:
+    """Swap two points and return the change in total HPWL,
+    both total and of internal nets
+    """
     # swap coordinates
     point_x[idx1], point_x[idx2] = point_x[idx2], point_x[idx1]
     point_y[idx1], point_y[idx2] = point_y[idx2], point_y[idx1]
@@ -344,6 +368,7 @@ def _swap_points(
 
     # Update hpwl
     delta_hpwl = 0.0
+    delta_hpwl_internal = 0.0
     for n in affected_nets:
         net_prev_hpwls[n] = net_hpwls[n]
         delta_hpwl -= net_prev_hpwls[n]
@@ -352,7 +377,10 @@ def _swap_points(
         net_hpwls[n] = new_h
         delta_hpwl += new_h
 
-    return delta_hpwl
+        if n >= external_nets: # if n is internal
+            delta_hpwl_internal += new_h - net_prev_hpwls[n]
+
+    return delta_hpwl, delta_hpwl_internal
 
 @njit(cache=True)
 def _undo_swap(
