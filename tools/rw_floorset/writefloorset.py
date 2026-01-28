@@ -25,8 +25,7 @@ def parse_options(
     parser = argparse.ArgumentParser(
         prog=prog,
         usage="%(prog)s [options]",
-        description="Reads a netlist in floorset format and generates the same"
-        "netlist in FPEF format.",
+        description="Converts a netlist from FPEF to floorset",
     )
     parser.add_argument("netlist", help="input file (netlist)")
     parser.add_argument("--data", required=True, help="output file (data)")

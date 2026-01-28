@@ -30,8 +30,7 @@ def parse_options(
     parser = argparse.ArgumentParser(
         prog=prog,
         usage="%(prog)s [options]",
-        description="Reads a netlist in floorset format and generates the same"
-        "netlist in FPEF format.",
+        description="Converts a netlist from floorset into FPEF."
     )
     parser.add_argument("--data", required=True, help="input file (data)")
     parser.add_argument("--label", required=True, help="input file (label)")
