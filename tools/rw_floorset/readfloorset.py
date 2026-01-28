@@ -6,7 +6,6 @@
 """Tool to read a netlist in the floorset format"""
 
 import argparse
-import pathlib
 from typing import Any, Optional
 from .readnetlist import read_floorset_netlist
 from cpupc.utils.keywords import KW

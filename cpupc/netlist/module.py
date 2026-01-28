@@ -9,7 +9,15 @@ Modules of a netlist
 
 import math
 from typing import Optional, Any
-from cpupc.geometry.geometry import Point, Shape, AspectRatio, Rectangle, create_strop
+from cpupc.geometry.fpolygon import FPolygon
+from cpupc.geometry.geometry import (
+    Point,
+    Shape,
+    AspectRatio,
+    Rectangle,
+    create_strop,
+    rectangles2FPolygon,
+)
 from cpupc.utils.keywords import KW
 from cpupc.utils.utils import valid_identifier, is_number
 
@@ -48,7 +56,7 @@ class Boundary:
     @staticmethod
     def code(constraint: str) -> int:
         return Boundary._constraints[constraint]
-    
+
     @staticmethod
     def from_code(code: int) -> Optional[str]:
         for key, value in Boundary._constraints.items():
@@ -432,6 +440,11 @@ class Module:
         for r in self.rectangles:
             r.center.x += inc_x
             r.center.y += inc_y
+
+    def polygon(self) -> "FPolygon":
+        """Returns the FPolygon corresponding to the union of the rectangles of the module"""
+        assert self.num_rectangles > 0, f"Module {self.name} has no rectangles"
+        return rectangles2FPolygon(self.rectangles)
 
     @staticmethod
     def _read_region_area(area: float | dict[str, float]) -> dict[str, float]:

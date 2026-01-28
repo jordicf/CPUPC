@@ -17,6 +17,7 @@ from dataclasses import dataclass, field
 
 from cpupc.utils.keywords import KW
 from cpupc.utils.utils import valid_identifier, almost_eq
+from cpupc.geometry.fpolygon import FPolygon, XY_Box
 
 RectDescriptor = tuple[float, float, float, float, str]  # (x,y,w,h, region)
 
@@ -363,22 +364,22 @@ class Rectangle:
     def xmin(self) -> float:
         """Returns the minimum x coordinate of the rectangle"""
         return self.center.x - self.shape.w / 2
-    
+
     @property
     def xmax(self) -> float:
         """Returns the maximum x coordinate of the rectangle"""
         return self.center.x + self.shape.w / 2
-    
+
     @property
     def ymin(self) -> float:
         """Returns the minimum y coordinate of the rectangle"""
         return self.center.y - self.shape.h / 2
-    
+
     @property
     def ymax(self) -> float:
         """Returns the maximum y coordinate of the rectangle"""
         return self.center.y + self.shape.h / 2
-    
+
     @property
     def is_line(self) -> bool:
         """Indicates whether the rectangle is a line (width or height is zero)"""
@@ -917,3 +918,17 @@ def create_strop(rectangles: list[Rectangle]) -> bool:
         rectangles[i].location = rectangles[0].find_location(rectangles[i])
 
     return True
+
+
+def rectangles2FPolygon(rectangles: list[Rectangle]) -> FPolygon:
+    """
+    Converts a list of rectangles into an FPolygon
+    :param rectangles: list of rectangles
+    :return: the FPolygon
+    """
+
+    boxes: list[XY_Box] = []
+    for r in rectangles:
+        bb = r.bounding_box
+        boxes.append(XY_Box(bb.ll.x, bb.ur.x, bb.ll.y, bb.ur.y))
+    return FPolygon(boxes)

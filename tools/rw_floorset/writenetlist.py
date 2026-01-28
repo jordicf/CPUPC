@@ -6,9 +6,12 @@
 import torch
 from cpupc.netlist.module import Boundary
 from cpupc.netlist.netlist import Netlist
+from cpupc.geometry.fpolygon import Vertices
 
 
-def write_netlist(net: Netlist) -> tuple[list[torch.Tensor], list[torch.Tensor]]:
+def write_netlist(
+    net: Netlist,
+) -> tuple[list[torch.Tensor], tuple[torch.Tensor, list[torch.Tensor]]]:
     """
     Writes a netlist in the floorset format
     :param net: input netlist
@@ -95,29 +98,23 @@ def write_netlist(net: Netlist) -> tuple[list[torch.Tensor], list[torch.Tensor]]
 
     data: list[torch.Tensor] = [t_module, t_b2b, t_p2b, t_pin]
 
-    # Rectangles of the solution (4 points of the rectangle)
-    sol = torch.zeros(num_blocks, 5, 2)
-    xmin, ymin = float("inf"), float("inf")
-    xmax, ymax = float("-inf"), float("-inf")
+    # Polygons of the solution
+    sol: list[torch.Tensor] = [torch.empty(0, 2)] * num_blocks
+    all_vertices: Vertices = []
     for m in net.modules:
         if m.is_iopin:
             continue
         i = mod2idx[m.name]
-        assert (
-            m.rectangles is not None and len(m.rectangles) == 1
-        ), f"Module {m.name} has no rectangle"
-        r = m.rectangles[0]
-        xmin = min(xmin, r.xmin)
-        ymin = min(ymin, r.ymin)
-        xmax = max(xmax, r.xmax)
-        ymax = max(ymax, r.ymax)
-        sol[i][0] = torch.tensor([r.xmin, r.ymin], dtype=torch.float32)
-        sol[i][1] = torch.tensor([r.xmin, r.ymax], dtype=torch.float32)
-        sol[i][2] = torch.tensor([r.xmax, r.ymax], dtype=torch.float32)
-        sol[i][3] = torch.tensor([r.xmax, r.ymin], dtype=torch.float32)
-        sol[i][4] = torch.tensor(
-            [r.xmin, r.ymin], dtype=torch.float32
-        )  # back to the origin
+        assert m.num_rectangles > 0, f"Module {m.name} has no rectangles"
+        vertices = m.polygon().vertices()
+        all_vertices.extend(vertices)
+        vertices.append(vertices[0])  # close the polygon
+        sol[i] = torch.tensor(vertices, dtype=torch.float32)
+
+    xmin = min(v[0] for v in all_vertices)
+    ymin = min(v[1] for v in all_vertices)
+    xmax = max(v[0] for v in all_vertices)
+    ymax = max(v[1] for v in all_vertices)
 
     area = (xmax - xmin) * (ymax - ymin)
     metrics = torch.tensor(
@@ -133,6 +130,6 @@ def write_netlist(net: Netlist) -> tuple[list[torch.Tensor], list[torch.Tensor]]
         ]
     )
 
-    label: list[torch.Tensor] = [metrics, sol]
+    label: tuple[torch.Tensor, list[torch.Tensor]] = (metrics, sol)
 
     return data, label
