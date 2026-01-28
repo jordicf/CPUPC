@@ -5,7 +5,7 @@
 
 from dataclasses import dataclass
 from cpupc.netlist.netlist import Netlist
-from cpupc.netlist.module import Module
+from cpupc.netlist.module import Module, Point
 
 
 @dataclass(slots=True)
@@ -15,10 +15,11 @@ class swapPoint:
     x: float
     y: float
     nets: list[int]  # List of net IDs that this point belongs to (sorted and unique)
-
+    x_orig: float # Original coordinates before splitting
+    y_orig: float
     def __init__(self, x: float, y: float) -> None:
-        self.x = x
-        self.y = y
+        self.x = self.x_orig = x
+        self.y = self.y_orig = y
         self.nets = []
 
 
@@ -29,11 +30,13 @@ class swapNet:
     weight: float  # Weight of the net
     points: list[int]  # List of point IDs that belong to this net
     hpwl: float  # Half-perimeter wire length (initialized to 0.0)
+    internal: bool # if the net connects splits of a module, instead of distinct modules
 
-    def __init__(self, weight: float, points: list[int]) -> None:
+    def __init__(self, weight: float, points: list[int], internal: bool = False) -> None:
         self.weight = weight
         self.points = points
         self.hpwl = 0.0
+        self.internal = internal
 
 
 class swapNetlist:
@@ -43,40 +46,53 @@ class swapNetlist:
         "_netlist",
         "_points",
         "_nets",
+        "_external_nets",
         "_name2idx",
         "_idx2name",
         "_movable",
+        "_areas",
         "_hpwl",
         "_avg_area",
         "_num_subblocks",
         "_split_net_factor",
+        "_split_threshold",
+        "_star_model",
         "_verbose",
     )
 
     _netlist: Netlist  # Original netlist
     _points: list[swapPoint]
     _nets: list[swapNet]
+    _external_nets: int # Number of non-internal nets
     _name2idx: dict[str, int]  # Mapping from names to indices of points
     _idx2name: list[str]  # Mapping from indices to names of points
     _movable: list[int]  # List of movable point indices
+    _areas: list[float] # List of module areas, movable or not
     _hpwl: float  # Total HPWL of the netlist
     _avg_area: float  # Average area of the movable modules
     _num_subblocks: int  # Number of fake subblocks created by splits
     _split_net_factor: float  # Weight factor for nets created by splits
+    _split_threshold: float # Percentage of area to be split, in [0,1] range
+    _star_model: bool # Whether to use star model for internal nets, grid model otherwise
     _verbose: bool  # Verbosity flag
 
     def __init__(
-        self, filename: str, split_net_factor: float = 1.0, verbose: bool = False
+        self, filename: str, split_net_factor: float = 1.0,
+        split_threshold: float = 0.5, star_model: bool = False,
+        verbose: bool = False
     ) -> None:
         self._points = []
         self._nets = []
         self._name2idx = {}
         self._idx2name = []
         self._movable = []
+        self._areas = []
         self._netlist = Netlist(filename)
         self._avg_area = 0.0
         self._num_subblocks = 0
         self._split_net_factor = split_net_factor
+        self._split_threshold = split_threshold
+        self._star_model = star_model
         self._verbose = verbose
 
         # Read modules
@@ -89,6 +105,7 @@ class swapNetlist:
             assert m.center is not None
             area = sum(r.area for r in m.rectangles)
             self.points.append(swapPoint(x=m.center.x, y=m.center.y))
+            self._areas.append(area)
             if not m.is_hard:
                 assert (
                     len(m.rectangles) == 1
@@ -107,9 +124,10 @@ class swapNetlist:
                 point_indices.append(idx)
                 self.points[idx].nets.append(len(self.nets))
             self.nets.append(swapNet(weight=e.weight, points=point_indices))
+        self._external_nets = len(self.nets)
 
         # Split movable modules that are too large
-        if self._split_net_factor > 0.0:
+        if self._split_net_factor > 0.0 and self._split_threshold > 0.0:
             self._split_modules()
 
         # Sort the nets of each point
@@ -179,9 +197,13 @@ class swapNetlist:
     def _split_modules(self) -> None:
         """Split all movable modules that are too large."""
         num_movable = len(self.movable)
+        target_area = self.get_target_area()
         for i in range(num_movable):
             idx = self.movable[i]
             m = self.idx2module(idx)
+            if m.area() <= target_area:
+                continue
+
             assert not m.is_hard, "Only soft modules can be split"
             assert (
                 len(m.rectangles) == 1
@@ -203,25 +225,33 @@ class swapNetlist:
         self, idx: int, nrows: int, ncols: int, net_weight: float = 1.0
     ) -> None:
         """Split a module into a matrix of smaller modules."""
-        assert nrows % 2 == 1 and ncols % 2 == 1, "Only odd splits are supported"
         # Get the rectangle of the module to be split
         m = self._netlist.get_module(self.idx2name(idx))
         assert not m.is_hard, "Only soft modules can be split"
         assert len(m.rectangles) == 1, "Only one rectangle per soft module is supported"
+        
         r = m.rectangles[0]
+        center = r.center
+        width, height = r.shape.w, r.shape.h
+
         # Compute the new dimensions
-        new_width = r.shape.w / ncols
-        new_height = r.shape.h / nrows
-        range_cols = ncols // 2
-        range_rows = nrows // 2
+        new_width = width / ncols
+        new_height = height / nrows
+        # center of the top left submodule in the split
+        top_left_center = center - Point(width / 2, height / 2) + Point(new_width / 2, new_height / 2)
+        
+        # find the submodule whose center minimises HPWL of external nets
+        i_central, j_central = \
+            self._find_central_submodule(idx, nrows, ncols)
+        
         # Create new modules
-        module = self.points[idx]
-        for i in range(-range_cols, range_cols + 1):
-            for j in range(-range_rows, range_rows + 1):
-                if i == j == 0:
+        for i in range(ncols):
+            for j in range(nrows):
+                if i == i_central and j == j_central:
                     continue  # Skip the original module
+                
                 new_module = swapPoint(
-                    x=module.x + i * new_width, y=module.y + j * new_height
+                    x=top_left_center.x + j * new_width, y=top_left_center.y - i * new_height
                 )
                 new_idx = len(self.points)
                 new_name = f"{m.name}_split_{new_idx}"
@@ -230,11 +260,98 @@ class swapNetlist:
                 self.points.append(new_module)
                 self.movable.append(new_idx)
                 self._num_subblocks += 1
-                # Star model for the nets between center and sub-blocks
+                # add internal nets
                 net_idx = len(self.nets)
-                self.nets.append(swapNet(weight=net_weight, points=[idx, new_idx]))
-                self.points[idx].nets.append(net_idx)
-                self.points[new_idx].nets.append(net_idx)
+                if self._star_model:
+                    # Star model for the nets between center and sub-blocks
+                    self.nets.append(swapNet(weight=net_weight, points=[idx, new_idx], internal=True))
+                    self.points[idx].nets.append(net_idx)
+                    self.points[new_idx].nets.append(net_idx)
+                else: # grid model
+                    # add net towards submodule (i-1,j)
+                    if i > 0:
+                        neigh_idx = new_idx - 1
+                        if i - i == i_central and j == j_central:
+                            neigh_idx = idx
+
+                        self.nets.append(swapNet(weight=net_weight, points=[neigh_idx, new_idx], internal=True))
+                        self.points[neigh_idx].nets.append(net_idx)
+                        self.points[new_idx].nets.append(net_idx)
+                    # add net towards submodule (i,j-1)
+                    if j > 0:
+                        neigh_idx = new_idx - ncols
+                        
+                        # special care with the (i_central, j_central) submodule, since it keeps the original index
+                        if i == i_central and j - 1 == j_central: 
+                            # case (i,j-1) = (i_central, j_central)
+                            neigh_idx = idx
+
+                        elif i == i_central + 1 and j < j_central: 
+                            # case (i_central, j_central) is between (i,j-1) and (i,j) in indexing order
+                            # since its index was skipped, we are off by one
+                            neigh_idx += 1
+                        
+                        self.nets.append(swapNet(weight=net_weight, points=[neigh_idx, new_idx], internal=True))
+                        self.points[neigh_idx].nets.append(net_idx)
+                        self.points[new_idx].nets.append(net_idx)
+
+        # Update the module's center to be the central
+        module = self.points[idx]
+        module.x = top_left_center.x + i_central * new_width
+        module.y = top_left_center.y + j_central * new_height
+
+    def _find_central_submodule(
+        self, idx: int, nrows: int, ncols: int
+    ) -> tuple[int, int]:
+        """
+        Finds the central submodule of a split module,
+        which is the submodule that minimizes hpwl
+        """
+        # naive approach, calculate HPWL for each possibility and return best
+
+        m = self._netlist.get_module(self.idx2name(idx))       
+        r = m.rectangles[0]
+        center = r.center
+        width, height = r.shape.w, r.shape.h
+
+        new_width = width / ncols
+        new_height = height / nrows
+        # center of the top left submodule in the split
+        top_left_center = center - Point(width / 2, height / 2) + Point(new_width / 2, new_height / 2)
+
+        best_hpwl = float('inf')
+        best_ij = (0, 0)
+        best_center = top_left_center
+
+        for i in range(nrows):
+            for j in range(ncols):
+                center_ij = Point(
+                    top_left_center.x + j * new_width,
+                    top_left_center.y - i * new_height
+                    )
+                self.points[idx].x = center_ij.x
+                self.points[idx].y = center_ij.y
+
+                external_hpwl = sum([
+                    self._compute_net_hpwl(self.nets[n]) for n in self.points[idx].nets
+                ])
+
+                if external_hpwl < best_hpwl:
+                    best_ij = (i, j)
+                    best_center = center_ij
+
+                elif external_hpwl == best_hpwl:
+                    # break ties with L1 distance to geometric center
+                    if abs(center.x - center_ij.x) + abs(center.y - center_ij.y) < \
+                       abs(center.x - best_center.x) + abs(center.y - best_center.y):
+                        best_ij = (i,j)
+                        best_center = center_ij
+
+        # restore original center
+        self.points[idx].x = center.x
+        self.points[idx].y = center.y
+
+        return best_ij
 
     def remove_subblocks(self) -> None:
         """Remove all fake subblocks created by splits.
@@ -253,6 +370,20 @@ class swapNetlist:
         del self._movable[-self._num_subblocks :]
         del self._nets[-self._num_subblocks :]
 
+    def get_target_area(self) -> float:
+        """Returns the largest area a module can have before needing splitting"""
+        movable_areas: list[float] = sorted([self._areas[i] for i in self.movable])
+        movable_area: float = sum(movable_areas)
+
+        acc: float = 0.0
+        i : int = 0
+        while acc < movable_area * self._split_threshold:
+            acc += movable_areas[i]
+            i += 1
+
+        return movable_areas[i - 1]
+
+
 
 def _best_split(
     width: float, height: float, target_area: float, aspect_ratio: float = 0.5
@@ -264,8 +395,8 @@ def _best_split(
     best_cost = float("inf")
     best_split = None
     max_slices = int(area / target_area) + 2
-    for nrows in range(1, max_slices, 2):
-        for ncols in range(1, max_slices, 2):
+    for nrows in range(1, max_slices, 1):
+        for ncols in range(1, max_slices, 1):
             new_width = width / ncols
             new_height = height / nrows
             block_area = new_width * new_height
