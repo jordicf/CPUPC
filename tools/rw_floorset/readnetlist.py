@@ -4,7 +4,7 @@
 # (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 import torch
-from typing import Any
+from typing import Any, Optional
 from cpupc.utils.utils import Python_object
 from cpupc.utils.keywords import KW
 from cpupc.netlist.module import Boundary
@@ -29,7 +29,7 @@ def read_floorset_netlist(
     pin_pos = n[0][3]
     nmodules = len(modules)
     npins = len(pin_pos)
-
+        
     # Read the modules
     dict_modules: dict[str, dict] = dict()
     for i in range(nmodules):

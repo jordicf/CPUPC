@@ -3,7 +3,7 @@
 # Licensed under the MIT License
 # (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
-"""Tool to read a netlist in the floorset format"""
+"""Tool to read a netlist in the floorset format and convert it to FPEF."""
 
 import argparse
 from typing import Any, Optional
@@ -42,15 +42,15 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
     """Main function."""
     options = parse_options(prog, args)
 
-    # Before doing anything, check output file suffix
+    # Before doing anything, file suffixes are checked
     netlist_type = file_type_from_suffix(options["netlist"])
-
     assert netlist_type != FileType.UNKNOWN, "Unknown suffix for netlist file"
+    
     die_type = FileType.UNKNOWN
     if options["die"] is not None:
         die_type = file_type_from_suffix(options["die"])
         assert die_type != FileType.UNKNOWN, "Unknown suffix for die file"
-
+    
     netlist, width, height = read_floorset_netlist(
         options["data"], options["label"]
     )
