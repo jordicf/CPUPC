@@ -74,6 +74,19 @@ def parse_options(
         default=None,
         help="random seed for deterministic results",
     )
+    parser.add_argument(
+        "--star",
+        type=bool,
+        default=True,
+        help="use star model for module splits"
+    )
+    parser.add_argument(
+        "--split_threshold",
+        type=float,
+        default=0.5,
+        help="percentage of area to be split, in [0,1] range. By default the"
+             " largest modules that together occupy 50% of the area are split"
+    )
 
     return vars(parser.parse_args(args))
 
@@ -81,7 +94,9 @@ def parse_options(
 def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
     """Main function."""
     options = parse_options(prog, args)
-    netlist = swapNetlist(options["netlist"], options["split_net"], options["verbose"])
+    netlist = swapNetlist(options["netlist"], options["split_net"], 
+                          options["split_threshold"], options["star"], 
+                          options["verbose"])
     simulated_annealing(
         netlist,
         n_swaps=options["swaps"],
