@@ -4,7 +4,7 @@
 # (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 import torch
-from typing import Any, Optional
+from typing import Any
 from cpupc.utils.utils import Python_object
 from cpupc.utils.keywords import KW
 from cpupc.netlist.module import Boundary
@@ -12,12 +12,13 @@ from cpupc.geometry.fpolygon import RPoint, vertices2polygon
 
 
 def read_floorset_netlist(
-    data_file: str, label_file: str
+    data_file: str, label_file: str, die_pins: bool
 ) -> tuple[Python_object, float, float]:
     """
     Reads a netlist in the floorset format
     :param netlist_file: input netlist file
     :param floorplan_file: floorplan file
+    :param die_pins: computes the die boundary including the pins
     :return: the netlist and the width and height of the die
     """
 
@@ -29,7 +30,7 @@ def read_floorset_netlist(
     pin_pos = n[0][3]
     nmodules = len(modules)
     npins = len(pin_pos)
-        
+
     # Read the modules
     dict_modules: dict[str, dict] = dict()
     for i in range(nmodules):
@@ -88,10 +89,19 @@ def read_floorset_netlist(
     assert len(metrics) == 8, "Unexpected format in label file"
     assert len(rectangles) == nmodules, "Unexpected format in label file"
 
+    # Forget the pins in die boundary calculation
+    if not die_pins:
+        xmin = ymin = float("inf")
+        xmax = ymax = float("-inf")
+        
     # Extract rectangles for each module and calculate the strop
     for i in range(nmodules):
         mod_name = f"M_{i}"
         vertices: set[RPoint] = {(float(x), float(y)) for x, y in rectangles[i]}
+        xmin = min(xmin, min(v[0] for v in vertices))
+        xmax = max(xmax, max(v[0] for v in vertices))
+        ymin = min(ymin, min(v[1] for v in vertices))
+        ymax = max(ymax, max(v[1] for v in vertices))
         polygon = vertices2polygon(vertices)
         strop = polygon.calculate_best_strop()
         assert strop is not None, f"Cannot calculate strop for module {mod_name}"
