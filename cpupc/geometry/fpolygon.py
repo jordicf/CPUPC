@@ -10,7 +10,7 @@ import copy
 from typing import Iterable, Iterator, Optional
 from dataclasses import dataclass
 import portion as p
-from rportion import RPolygon, rclosedopen, rclosed
+from rportion import RPolygon, rclosedopen
 
 # Some auxiliary types
 
