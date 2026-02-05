@@ -29,8 +29,8 @@ TOOLS = {
     "inirects": "tools.inirects.inirects",
     "all": "tools.all.all",
     "floor_designer": "tools.floor_designer.floor_designer",
-    "readfloorset": "tools.rw_floorset.readfloorset",
-    "writefloorset": "tools.rw_floorset.writefloorset",
+    "readfloorset": "tools.floorset.readfloorset",
+    "writefloorset": "tools.floorset.writefloorset",
 }
 
 
