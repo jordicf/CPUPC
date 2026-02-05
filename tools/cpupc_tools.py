@@ -31,6 +31,7 @@ TOOLS = {
     "floor_designer": "tools.floor_designer.floor_designer",
     "readfloorset": "tools.floorset.readfloorset",
     "writefloorset": "tools.floorset.writefloorset",
+    "validate": "tools.floorset.validate",
 }
 
 

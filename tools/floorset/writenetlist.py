@@ -19,8 +19,8 @@ def write_netlist(
     """
 
     # Dictionaries to names into indices
-    mod2idx: dict[str, int] = dict()
-    pin2idx: dict[str, int] = dict()
+    mod2idx = _name2idx([m.name for m in net.modules if not m.is_iopin])
+    pin2idx = _name2idx([m.name for m in net.modules if m.is_iopin])
     mib: dict[str, int] = dict()
     adjs: dict[str, int] = dict()
 
@@ -29,10 +29,6 @@ def write_netlist(
     assert all(m.center is not None for m in net.modules), "Some module has no center"
 
     for m in net.modules:
-        if m.is_iopin:
-            pin2idx[m.name] = len(pin2idx)
-        else:
-            mod2idx[m.name] = len(mod2idx)
         if m.cluster is not None and m.cluster not in adjs:
             adjs[m.cluster] = len(adjs) + 1
         if m.mib is not None and m.mib not in mib:
@@ -133,3 +129,21 @@ def write_netlist(
     label: tuple[torch.Tensor, list[torch.Tensor]] = (metrics, sol)
 
     return data, label
+
+def _name2idx(names: list[str]) -> dict[str, int]:
+    """Helper function to convert a list of names into a dictionary of name to index.
+    The names are sorted by their numerical suffix (if it exists) and then by their name. 
+    """
+    name_idx = [(name, _str_suffix(name)) for name in names]
+    name_idx.sort(key=lambda x: (x[1], x[0]))
+    return {name: i for i, (name, _) in enumerate(name_idx)}
+
+
+def _str_suffix(s: str) -> int:
+    """Helper function to extract the numerical suffix of a string.
+    In case there is no numerical suffix, -1 is returned.
+    For example, for "M_10" it returns 10, for "P_5" it returns 5, and for "M_fixed" it returns -1.
+    """
+    temp_idx = s.rfind(next(filter(lambda x: not x.isdigit(), s[::-1])))
+    suffix = s[temp_idx+1:]
+    return int(suffix) if suffix.isdigit() else -1

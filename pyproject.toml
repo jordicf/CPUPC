@@ -22,7 +22,8 @@ dependencies = [
     "torch",
     "PySide6",
     "numba",
-    "networkx"
+    "networkx",
+    "shapely",
 ]
 
 [project.optional-dependencies]
@@ -64,6 +65,6 @@ packages = [
 ]
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.14"
 ignore_missing_imports = true
 plugins = "numpy.typing.mypy_plugin"
