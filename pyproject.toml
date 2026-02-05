@@ -55,7 +55,7 @@ packages = [
     "tools.draw",
     "tools.hello",
     "tools.legalrect",
-    "tools.floorset_parser",
+    "tools.floorset",
     "tools.fastpswap",
     "tools.inipoints",
     "tools.inirects",
