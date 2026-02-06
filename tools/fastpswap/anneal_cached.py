@@ -39,20 +39,24 @@ def simulated_annealing(
     point_nets_indices = np.array(p_nets_indices, dtype=np.int64)
     point_nets_offsets = np.array(p_nets_offsets, dtype=np.int64)
 
+    assert n_points == len(point_nets_offsets) - 1
+
     # Net properties and connectivity
     n_nets = len(net.nets)
     n_external_nets: int = net._external_nets
     net_weights = np.array([n.weight for n in net.nets], dtype=np.float64)
     net_hpwls = np.zeros(n_nets, dtype=np.float64)
 
-    n_points_indices: list[int] = []
-    n_points_offsets: list[int] = [0]
+    net_points_indices: list[int] = []
+    net_points_offsets: list[int] = [0]
     for n in net.nets:
-        n_points_indices.extend(n.points)
-        n_points_offsets.append(len(n_points_indices))
+        net_points_indices.extend(n.points)
+        net_points_offsets.append(len(net_points_indices))
         
-    net_points_indices = np.array(n_points_indices, dtype=np.int64)
-    net_points_offsets = np.array(n_points_offsets, dtype=np.int64)
+    net_points_indices = np.array(net_points_indices, dtype=np.int64)
+    net_points_offsets = np.array(net_points_offsets, dtype=np.int64)
+
+    assert n_nets == len(net_points_offsets) - 1
 
     movable = np.array(net.movable, dtype=np.int64)
 
@@ -136,6 +140,9 @@ def jit_simulated_annealing(
     best_y = point_y.copy()
     best_hpwl = current_hpwl = total_hpwl
     best_hpwl_internal = current_hpwl_internal = total_internal_hpwl
+    best_dispersion = _compute_internal_unweighted_hpwl(
+        external_nets, point_x, point_y, net_points_indices, net_points_offsets
+    )
 
     if verbose:
         print("Initially: Temperature", temp, "HPWL", best_hpwl)
@@ -177,13 +184,25 @@ def jit_simulated_annealing(
                 )
                 
             avg += current_hpwl
+        
+        current_dispersion = _compute_internal_unweighted_hpwl(
+            external_nets, point_x, point_y, net_points_indices, net_points_offsets
+        )
+
+        if no_improvement < 0:
+            best_dispersion = _compute_internal_unweighted_hpwl(
+                external_nets, best_x, best_y, net_points_indices, net_points_offsets
+            )
 
         avg /= n_swaps
-        if avg >= best_avg:
+        if avg >= best_avg and current_dispersion >= best_dispersion:
             no_improvement += 1
         else:
+            if avg >= best_avg:
+                print("The second stopping condition delayed the end of the algorithm")
             no_improvement = 0
             best_avg = avg
+            best_dispersion = current_dispersion
             
         if verbose:
             print(
@@ -201,11 +220,11 @@ def jit_simulated_annealing(
         # update cost of best and current solutions
         current_hpwl_external = current_hpwl - current_hpwl_internal
         current_hpwl_internal /= temp_factor
-        current_hpwl = current_hpwl_external + current_hpwl_external
+        current_hpwl = current_hpwl_external + current_hpwl_internal
 
         best_hpwl_external = best_hpwl - best_hpwl_internal
         best_hpwl_internal /= temp_factor
-        best_hpwl = best_hpwl_external + best_hpwl_external
+        best_hpwl = best_hpwl_external + best_hpwl_internal
 
     # Restore best solution
     for i in range(len(point_x)):
@@ -295,6 +314,44 @@ def _compute_net_hpwl(
         if ny > max_y: max_y = ny
         
     return (max_x - min_x + max_y - min_y) * net_weights[net_idx]
+
+
+@njit(cache=True)
+def _compute_internal_unweighted_hpwl(
+    external_nets: int,
+    px: np.ndarray,
+    py: np.ndarray,
+    net_points_indices: np.ndarray,
+    net_points_offsets: np.ndarray
+) -> float:
+    """Compute the half-perimeter wire length (HPWL) of all internal nets
+    ignoring weights."""
+
+    total_hpwl: float = 0.0
+    n_nets: int = len(net_points_offsets) - 1
+
+    for net_idx in range(external_nets, n_nets):        
+        start = net_points_offsets[net_idx]
+        end = net_points_offsets[net_idx+1]
+        
+        if start >= end: continue
+
+        p0 = net_points_indices[start]
+        min_x = max_x = px[p0]
+        min_y = max_y = py[p0]
+
+        for i in range(start + 1, end):
+            p = net_points_indices[i]
+            nx = px[p]
+            ny = py[p]
+            if nx < min_x: min_x = nx
+            if nx > max_x: max_x = nx
+            if ny < min_y: min_y = ny
+            if ny > max_y: max_y = ny
+        
+        total_hpwl += (max_x - min_x) + (max_y - min_y)
+
+    return total_hpwl
 
 
 @njit(cache=True)
