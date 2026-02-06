@@ -135,7 +135,7 @@ class swapNetlist:
             # Sorted and unique nets (to avoid repeated nets)
             p.nets = sorted(set(p.nets))
 
-        # Compute initial HPWL
+        # Compute initial HPWL (this includes the internal 'fake' nets)
         self.hpwl = sum(self._compute_net_hpwl(net) for net in self.nets)
 
     @property
@@ -210,7 +210,7 @@ class swapNetlist:
             ), "Only one rectangle per soft module is supported"
             r = m.rectangles[0]
             nrows, ncols = _best_split(
-                r.shape.w, r.shape.h, self._avg_area, aspect_ratio=0.5
+                r.shape.w, r.shape.h, target_area, aspect_ratio=0.5
             )
             if nrows > 1 or ncols > 1:
                 if self._verbose:
@@ -238,15 +238,16 @@ class swapNetlist:
         new_width = width / ncols
         new_height = height / nrows
         # center of the top left submodule in the split
-        top_left_center = center - Point(width / 2, height / 2) + Point(new_width / 2, new_height / 2)
+        top_left_center = Point(center.x - width / 2 + new_width / 2, 
+                                center.y + height / 2 - new_height / 2)
         
         # find the submodule whose center minimises HPWL of external nets
         i_central, j_central = \
             self._find_central_submodule(idx, nrows, ncols)
         
         # Create new modules
-        for i in range(ncols):
-            for j in range(nrows):
+        for i in range(nrows):
+            for j in range(ncols):
                 if i == i_central and j == j_central:
                     continue  # Skip the original module
                 
@@ -268,26 +269,29 @@ class swapNetlist:
                     self.points[idx].nets.append(net_idx)
                     self.points[new_idx].nets.append(net_idx)
                 else: # grid model
-                    # add net towards submodule (i-1,j)
-                    if i > 0:
+                    # add net towards submodule (i,j-1)
+                    if j > 0:
+                        net_idx = len(self.nets)
                         neigh_idx = new_idx - 1
-                        if i - i == i_central and j == j_central:
+                        if i == i_central and j - 1 == j_central:
                             neigh_idx = idx
 
                         self.nets.append(swapNet(weight=net_weight, points=[neigh_idx, new_idx], internal=True))
                         self.points[neigh_idx].nets.append(net_idx)
                         self.points[new_idx].nets.append(net_idx)
-                    # add net towards submodule (i,j-1)
-                    if j > 0:
+                    # add net towards submodule (i-1,j)
+                    if i > 0:
+                        net_idx = len(self.nets)
                         neigh_idx = new_idx - ncols
                         
                         # special care with the (i_central, j_central) submodule, since it keeps the original index
-                        if i == i_central and j - 1 == j_central: 
-                            # case (i,j-1) = (i_central, j_central)
+                        if i - 1 == i_central and j == j_central: 
+                            # case (i-1,j) = (i_central, j_central)
                             neigh_idx = idx
 
-                        elif i == i_central + 1 and j < j_central: 
-                            # case (i_central, j_central) is between (i,j-1) and (i,j) in indexing order
+                        elif i - 1 == i_central and j < j_central or \
+                             i == i_central and j > j_central: 
+                            # case (i_central, j_central) is between (i-1,j) and (i,j) in indexing order
                             # since its index was skipped, we are off by one
                             neigh_idx += 1
                         
@@ -295,10 +299,27 @@ class swapNetlist:
                         self.points[neigh_idx].nets.append(net_idx)
                         self.points[new_idx].nets.append(net_idx)
 
+                    # add net towards submodule (i+1,j) if it is the central one
+                    if i + 1 == i_central and j == j_central:
+                        net_idx = len(self.nets)
+                        neigh_idx = idx
+                        self.nets.append(swapNet(weight=net_weight, points=[neigh_idx, new_idx], internal=True))
+                        self.points[neigh_idx].nets.append(net_idx)
+                        self.points[new_idx].nets.append(net_idx)
+
+                    # add net towards submodule (i,j+1) if it is the central one
+                    if i == i_central and j + 1 == j_central:
+                        net_idx = len(self.nets)
+                        neigh_idx = idx
+                        self.nets.append(swapNet(weight=net_weight, points=[neigh_idx, new_idx], internal=True))
+                        self.points[neigh_idx].nets.append(net_idx)
+                        self.points[new_idx].nets.append(net_idx)
+                    
+
         # Update the module's center to be the central
         module = self.points[idx]
-        module.x = top_left_center.x + i_central * new_width
-        module.y = top_left_center.y + j_central * new_height
+        module.x = top_left_center.x + j_central * new_width
+        module.y = top_left_center.y - i_central * new_height
 
     def _find_central_submodule(
         self, idx: int, nrows: int, ncols: int
@@ -317,7 +338,8 @@ class swapNetlist:
         new_width = width / ncols
         new_height = height / nrows
         # center of the top left submodule in the split
-        top_left_center = center - Point(width / 2, height / 2) + Point(new_width / 2, new_height / 2)
+        top_left_center = Point(center.x - width / 2 + new_width / 2, 
+                                center.y + height / 2 - new_height / 2)
 
         best_hpwl = float('inf')
         best_ij = (0, 0)
@@ -377,7 +399,7 @@ class swapNetlist:
 
         acc: float = 0.0
         i : int = 0
-        while acc < movable_area * self._split_threshold:
+        while acc < movable_area * (1 - self._split_threshold):
             acc += movable_areas[i]
             i += 1
 
