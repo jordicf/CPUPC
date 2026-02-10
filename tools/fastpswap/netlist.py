@@ -15,12 +15,13 @@ class swapPoint:
     x: float
     y: float
     nets: list[int]  # List of net IDs that this point belongs to (sorted and unique)
-    x_orig: float # Original coordinates before splitting
-    y_orig: float
-    def __init__(self, x: float, y: float) -> None:
-        self.x = self.x_orig = x
-        self.y = self.y_orig = y
+    parent: int # Index of the original module (before any splitting)
+
+    def __init__(self, x: float, y: float, parent: int = -1) -> None:
+        self.x = x
+        self.y = y
         self.nets = []
+        self.parent = parent
 
 
 @dataclass(slots=True)
@@ -104,7 +105,7 @@ class swapNetlist:
             self._idx2name.append(m.name)
             assert m.center is not None
             area = sum(r.area for r in m.rectangles)
-            self.points.append(swapPoint(x=m.center.x, y=m.center.y))
+            self.points.append(swapPoint(x=m.center.x, y=m.center.y, parent=idx))
             self._areas.append(area)
             if not m.is_hard:
                 assert (
@@ -127,6 +128,7 @@ class swapNetlist:
         self._external_nets = len(self.nets)
 
         # Split movable modules that are too large
+        assert 0 <= self._split_threshold <= 1.0, "Split threshold must be in [0, 1] range"
         if self._split_net_factor > 0.0 and self._split_threshold > 0.0:
             self._split_modules()
 
@@ -198,6 +200,8 @@ class swapNetlist:
         """Split all movable modules that are too large."""
         num_movable = len(self.movable)
         target_area = self.get_target_area()
+        avg_net_weight = sum([net.weight for net in self.nets]) / len(self.nets)
+        inner_net_weight = avg_net_weight * self._split_net_factor
         for i in range(num_movable):
             idx = self.movable[i]
             m = self.idx2module(idx)
@@ -217,9 +221,9 @@ class swapNetlist:
                     print(
                         f"Splitting module {m.name} (area {r.area:.1f}) "
                         f"into {nrows}x{ncols} sub-blocks "
-                        f"with net weight {self._split_net_factor:.1f}"
+                        f"with net weight {inner_net_weight:.1f}"
                     )
-                self._split_module(idx, nrows, ncols, net_weight=self._split_net_factor)
+                self._split_module(idx, nrows, ncols, net_weight=inner_net_weight)
 
     def _split_module(
         self, idx: int, nrows: int, ncols: int, net_weight: float = 1.0
@@ -252,7 +256,9 @@ class swapNetlist:
                     continue  # Skip the original module
                 
                 new_module = swapPoint(
-                    x=top_left_center.x + j * new_width, y=top_left_center.y - i * new_height
+                    x=top_left_center.x + j * new_width, 
+                    y=top_left_center.y - i * new_height,
+                    parent=idx
                 )
                 new_idx = len(self.points)
                 new_name = f"{m.name}_split_{new_idx}"
@@ -317,6 +323,7 @@ class swapNetlist:
                     
 
         # Update the module's center to be the central
+        # the central submodule keeps the original index, the others get new indices
         module = self.points[idx]
         module.x = top_left_center.x + j_central * new_width
         module.y = top_left_center.y - i_central * new_height
@@ -390,7 +397,7 @@ class swapNetlist:
 
         del self._points[-self._num_subblocks :]
         del self._movable[-self._num_subblocks :]
-        del self._nets[-self._num_subblocks :]
+        del self._nets[self._external_nets:]
 
     def get_target_area(self) -> float:
         """Returns the largest area a module can have before needing splitting"""
