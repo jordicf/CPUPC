@@ -58,9 +58,9 @@ def parse_options(
     parser.add_argument(
         "--split_net",
         type=float,
-        default=1.0,
+        default=0.5,
         help="weight factor for nets created by splits (0 to disable splits). "
-        "Default: 1.0.",
+        "Default: 0.5.",
     )
     parser.add_argument(
         "-g",
@@ -76,9 +76,9 @@ def parse_options(
     )
     parser.add_argument(
         "--star",
-        type=bool,
-        default=True,
-        help="use star model for module splits"
+        type=int,
+        default=1,
+        help="use star model for module splits (0 or 1)"
     )
     parser.add_argument(
         "--split_threshold",
