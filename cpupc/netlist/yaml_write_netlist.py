@@ -4,7 +4,7 @@
 # (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 from typing import Any
-from .module import Module, ModuleParams
+from .module import Module
 from .netlist_types import HyperEdge, NamedHyperEdge
 from ..geometry.geometry import Rectangle
 from ..utils.keywords import KW
@@ -46,45 +46,45 @@ def dump_yaml_module(module: Module) -> dict[str, Any]:
     # Dump all the information
 
     if module.is_fixed:
-        info[KW.FIXED] = True
+        info[str(KW.FIXED)] = True
     elif module.is_hard:
-        info[KW.HARD] = True
+        info[str(KW.HARD)] = True
 
     if module.is_iopin:
-        info[KW.TERMINAL] = True
+        info[str(KW.TERMINAL)] = True
 
     # Soft modules
     if not module.is_hard:
         if module.is_iopin:
-            info[KW.LENGTH] = module.pin_length
+            info[str(KW.LENGTH)] = module.pin_length
         else:
             if len(module.area_regions) == 1 and KW.GROUND in module.area_regions:
-                info[KW.AREA] = module.area(KW.GROUND)
+                info[str(KW.AREA)] = module.area(KW.GROUND)
             else:
-                info[KW.AREA] = module.area()
+                info[str(KW.AREA)] = module.area()
 
         if module.center is not None and module.num_rectangles == 0:
-            info[KW.CENTER] = [module.center.x, module.center.y]
+            info[str(KW.CENTER)] = [module.center.x, module.center.y]
 
         if module.aspect_ratio is not None:
-            info[KW.ASPECT_RATIO] = [
+            info[str(KW.ASPECT_RATIO)] = [
                 module.aspect_ratio.min_wh,
                 module.aspect_ratio.max_wh,
             ]
 
     # Clusters and boundary constraints
     if module.cluster is not None:
-        info[KW.ADJ_CLUSTER] = module.cluster
+        info[str(KW.ADJ_CLUSTER)] = module.cluster
 
     if module.mib is not None:
-        info[KW.MIB] = module.mib
+        info[str(KW.MIB)] = module.mib
         
     if module.boundary is not None:
-        info[KW.BOUNDARY] = module.boundary
+        info[str(KW.BOUNDARY)] = module.boundary
 
     # Rectangles
     if module.num_rectangles > 0:
-        info[KW.RECTANGLES] = dump_yaml_rectangles(module.rectangles)
+        info[str(KW.RECTANGLES)] = dump_yaml_rectangles(module.rectangles)
 
     return info
 
@@ -98,7 +98,7 @@ def dump_yaml_rectangles(rectangles: list[Rectangle]) -> list[list[float | str]]
     rects = list[list[float | str]]()
     for r in rectangles:
         list_rect: list[float | str] = [r.center.x, r.center.y, r.shape.w, r.shape.h]
-        if r.region != KW.GROUND:
+        if r.region != str(KW.GROUND):
             list_rect.append(r.region)
         rects.append(list_rect)
     return rects

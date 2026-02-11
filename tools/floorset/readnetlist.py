@@ -5,6 +5,7 @@
 
 import torch
 from typing import Any
+from .fsconst import FsNetlist, FsConstraint
 from cpupc.utils.utils import Python_object
 from cpupc.utils.keywords import KW
 from cpupc.netlist.module import Boundary
@@ -24,10 +25,10 @@ def read_floorset_netlist(
 
     n = torch.load(data_file)
     assert len(n) == 1
-    modules = n[0][0]
-    module2module = n[0][1]
-    pin2module = n[0][2]
-    pin_pos = n[0][3]
+    modules = n[0][FsNetlist.MODULES]
+    module2module = n[0][FsNetlist.MODULE2MODULE]
+    pin2module = n[0][FsNetlist.PIN2MODULE]
+    pin_pos = n[0][FsNetlist.PIN_POS]
     nmodules = len(modules)
     npins = len(pin_pos)
 
@@ -38,23 +39,23 @@ def read_floorset_netlist(
         hard = False
         info: dict[str, Any] = dict()
 
-        if modules[i][1] == 1:
-            info[KW.HARD] = True
+        if modules[i][FsConstraint.HARD] == 1:
+            info[str(KW.HARD)] = True
             hard = True
-        if modules[i][2] == 1:
-            info[KW.FIXED] = True
+        if modules[i][FsConstraint.FIXED] == 1:
+            info[str(KW.FIXED)] = True
             hard = True
 
         if not hard:
-            info[KW.AREA] = float(modules[i][0])
-        if modules[i][3] != 0:
-            info[KW.MIB] = f"MIB_{int(modules[i][3])}"
-        if modules[i][4] != 0:
-            info[KW.ADJ_CLUSTER] = f"CL_{int(modules[i][4])}"
-        if modules[i][5] != 0:
-            constraint = Boundary.from_code(int(modules[i][5]))
+            info[str(KW.AREA)] = float(modules[i][FsConstraint.AREA])
+        if modules[i][FsConstraint.MIB] != 0:
+            info[str(KW.MIB)] = f"MIB_{int(modules[i][FsConstraint.MIB])}"
+        if modules[i][FsConstraint.ADJ_CLUSTER] != 0:
+            info[str(KW.ADJ_CLUSTER)] = f"CL_{int(modules[i][FsConstraint.ADJ_CLUSTER])}"
+        if modules[i][FsConstraint.BOUNDARY] != 0:
+            constraint = Boundary.from_code(int(modules[i][FsConstraint.BOUNDARY]))
             assert constraint is not None
-            info[KW.BOUNDARY] = constraint
+            info[str(KW.BOUNDARY)] = constraint
         dict_modules[mod_name] = info
 
     # Read the pins and derive the boundaries of the die
@@ -63,14 +64,14 @@ def read_floorset_netlist(
     for p in range(npins):
         pin_name = f"P_{p}"
         info_pin: dict[str, Any] = dict()
-        info_pin[KW.IO_PIN] = True
+        info_pin[str(KW.IO_PIN)] = True
         x, y = float(pin_pos[p][0]), float(pin_pos[p][1])
         xmin = min(xmin, x)
         xmax = max(xmax, x)
         ymin = min(ymin, y)
         ymax = max(ymax, y)
-        info_pin[KW.RECTANGLES] = [x, y, 0, 0]
-        info_pin[KW.FIXED] = True
+        info_pin[str(KW.RECTANGLES)] = [x, y, 0, 0]
+        info_pin[str(KW.FIXED)] = True
         dict_modules[pin_name] = info_pin
 
     # Read the nets module - module
@@ -111,12 +112,12 @@ def read_floorset_netlist(
             width = rect.width
             height = rect.height
             list_rectangles.append([center[0], center[1], width, height])
-        dict_modules[mod_name][KW.RECTANGLES] = list_rectangles
+        dict_modules[mod_name][str(KW.RECTANGLES)] = list_rectangles
 
     return (
         {
-            KW.MODULES: dict_modules,
-            KW.NETS: list_nets,
+            str(KW.MODULES): dict_modules,
+            str(KW.NETS): list_nets,
         },
         xmax - xmin,
         ymax - ymin,

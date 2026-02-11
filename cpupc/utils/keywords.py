@@ -5,10 +5,10 @@
 """
 Keywords for JSON/YAML files and dictionary keys
 """
+from enum import StrEnum
 
 
-
-class KW:
+class KW(StrEnum):
     """Class to store the keywords used in JSON/YAML files"""
 
     MODULES = "Modules"  # Modules of the netlist
@@ -29,7 +29,7 @@ class KW:
     FLIP = "flip"  # Can a non-rectangular hard module be flipped?
     ADJ_CLUSTER = "adj_cluster"  # Cluster of adjacent polygons
     MIB = "mib"  # MIB cluster of multiple instances
-    BOUNDARY = "boundary" # Boundary constraint of a module
+    BOUNDARY = "boundary"  # Boundary constraint of a module
     RECTANGLES = "rectangles"  # For lists of rectangles
     SLOTS = "slots"  # Slots to locate the pin arrays
     REGION = "region"  # Region of a rectangle (e.g. LUT, BRAM, DSP)

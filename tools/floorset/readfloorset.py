@@ -60,8 +60,8 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
 
     if options["die"] is not None:
         die: Python_object = {
-            KW.WIDTH: width,
-            KW.HEIGHT: height
+            str(KW.WIDTH): width,
+            str(KW.HEIGHT): height
         }
         die_type = file_type_from_suffix(options["die"])
         write_json_yaml(die, die_type == FileType.JSON, options["die"])

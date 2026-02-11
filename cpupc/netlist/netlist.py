@@ -290,6 +290,6 @@ class Netlist:
         Generates the data structure to be dumped into a JSON or YAML file.
         """
         return {
-            KW.MODULES: dump_yaml_modules(self.modules),
-            KW.NETS: dump_yaml_edges(self.edges),
+            str(KW.MODULES): dump_yaml_modules(self.modules),
+            str(KW.NETS): dump_yaml_edges(self.edges),
         }

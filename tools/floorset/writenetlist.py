@@ -4,6 +4,7 @@
 # (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
 import torch
+from .fsconst import FsConstraint
 from cpupc.netlist.module import Boundary
 from cpupc.netlist.netlist import Netlist
 from cpupc.geometry.fpolygon import Vertices
@@ -42,12 +43,14 @@ def write_netlist(
         if m.is_iopin:
             continue
         i = mod2idx[m.name]
-        t_module[i][0] = m.area()
-        t_module[i][1] = 1.0 if m.is_hard and not m.is_fixed else 0.0
-        t_module[i][2] = 1.0 if m.is_fixed else 0.0
-        t_module[i][3] = float(mib[m.mib]) if m.mib is not None else 0.0
-        t_module[i][4] = float(adjs[m.cluster]) if m.cluster is not None else 0.0
-        t_module[i][5] = (
+        t_module[i][FsConstraint.AREA] = m.area()
+        t_module[i][FsConstraint.HARD] = 1.0 if m.is_hard and not m.is_fixed else 0.0
+        t_module[i][FsConstraint.FIXED] = 1.0 if m.is_fixed else 0.0
+        t_module[i][FsConstraint.MIB] = float(mib[m.mib]) if m.mib is not None else 0.0
+        t_module[i][FsConstraint.ADJ_CLUSTER] = (
+            float(adjs[m.cluster]) if m.cluster is not None else 0.0
+        )
+        t_module[i][FsConstraint.BOUNDARY] = (
             float(Boundary.code(m.boundary)) if m.boundary is not None else 0.0
         )
 
@@ -130,9 +133,10 @@ def write_netlist(
 
     return data, label
 
+
 def _name2idx(names: list[str]) -> dict[str, int]:
     """Helper function to convert a list of names into a dictionary of name to index.
-    The names are sorted by their numerical suffix (if it exists) and then by their name. 
+    The names are sorted by their numerical suffix (if it exists) and then by their name.
     """
     name_idx = [(name, _str_suffix(name)) for name in names]
     name_idx.sort(key=lambda x: (x[1], x[0]))
@@ -145,5 +149,5 @@ def _str_suffix(s: str) -> int:
     For example, for "M_10" it returns 10, for "P_5" it returns 5, and for "M_fixed" it returns -1.
     """
     temp_idx = s.rfind(next(filter(lambda x: not x.isdigit(), s[::-1])))
-    suffix = s[temp_idx+1:]
+    suffix = s[temp_idx + 1 :]
     return int(suffix) if suffix.isdigit() else -1

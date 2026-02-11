@@ -7,6 +7,7 @@ from shapely import unary_union
 import torch
 from itertools import combinations
 from shapely.geometry import Polygon
+from .fsconst import FsConstraint
 from .utils import (
     check_boundary_const,
     check_clust_const,
@@ -27,6 +28,7 @@ def check_constraints(
     check_boundary: bool,
     check_hard: bool,
     check_fixed: bool,
+    aspect_ratio: float = 0.0,
 ) -> list[str]:
     """Checks the constraints of a floorplan solution against a reference solution.
     Returns a list of strings with the encountered errors."""
@@ -46,30 +48,33 @@ def check_constraints(
             [
                 i
                 for i in range(len(modules))
-                if modules[i][1] == 1 and modules[i][2] == 0
+                if modules[i][FsConstraint.HARD] == 1 and modules[i][FsConstraint.FIXED] == 0
             ]
         ).long()
         errors.extend(check_fixed_const(indices, solution, reference))
 
     if check_fixed:
         indices = torch.Tensor(
-            [i for i in range(len(modules)) if modules[i][2] == 1]
+            [i for i in range(len(modules)) if modules[i][FsConstraint.FIXED] == 1]
         ).long()
         errors.extend(check_preplaced_const(indices, solution, reference))
 
     if check_mib:
-        mibs = torch.Tensor([modules[i][3].item() for i in range(len(modules))]).long()
+        mibs = torch.Tensor([modules[i][FsConstraint.MIB].item() for i in range(len(modules))]).long()
         errors.extend(check_mib_const(mibs, solution))
 
     if check_adj_cluster:
         clusters = torch.Tensor(
-            [modules[i][4].item() for i in range(len(modules))]
+            [modules[i][FsConstraint.ADJ_CLUSTER].item() for i in range(len(modules))]
         ).long()
         errors.extend(check_clust_const(clusters, solution))
 
     if check_boundary:
         errors.extend(check_boundary_constraints(modules, solution, reference))
-
+    
+    if aspect_ratio > 0:
+        errors.extend(check_aspect_ratio_constraints(modules, solution, aspect_ratio))
+    
     return errors
 
 
@@ -150,3 +155,34 @@ def check_boundary_constraints(
     height = max(y for x, y in bbox.exterior.coords)
     boundary = torch.Tensor([modules[i][5].item() for i in range(len(modules))]).long()
     return check_boundary_const(boundary, solution, width, height)
+
+
+def check_aspect_ratio_constraints(
+    modules, solution, aspect_ratio: float
+) -> list[str]:
+    """
+    Check for violations of the aspect ratio constraint by evaluating the aspect ratio of each polygon.
+
+    Args:
+        modules (torch.Tensor): Tensor containing module information.
+        solution (list): Solutions list containing polygons.
+        aspect_ratio (float): The maximum allowed aspect ratio.
+
+    Returns:
+        list[str]: A list of error messages for violations found.
+    """
+    errors: list[str] = []
+    for i in range(len(modules)):
+        if modules[i][FsConstraint.HARD] == 1 or modules[i][FsConstraint.FIXED] == 1:
+            continue  # Skip hard and fixed modules, as they may not have a defined aspect ratio
+        minx, miny, maxx, maxy = solution[i].bounds
+        width = maxx - minx
+        height = maxy - miny
+        print(f"Module {i}: width={width:.2f}, height={height:.2f}, aspect ratio={max(width/height, height/width):.2f}")
+        if height > 0 and width > 0:
+            ar = max(width / height, height / width)
+            if ar > aspect_ratio:
+                errors.append(
+                    f"Module {i}: aspect ratio constraint violated (aspect ratio {ar:.2f} exceeds bound {aspect_ratio})"
+                )
+    return errors

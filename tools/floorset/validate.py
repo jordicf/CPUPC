@@ -44,6 +44,7 @@ def parse_options(
     )
     parser.add_argument("--hard", action="store_true", help="validate hard modules")
     parser.add_argument("--fixed", action="store_true", help="validate fixed modules")
+    parser.add_argument("--ar", type=float, help="validate aspect ratio within the bounds AR and 1/AR")
     return vars(parser.parse_args(args))
 
 
@@ -57,6 +58,13 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
         for opt in options_checks:
             options[opt] = True
             
+    if options["ar"] is not None:
+        assert options["ar"] > 0, "Aspect ratio bound must be greater than 0."
+        ar = options["ar"]
+        aspect_ratio = max(ar, 1 / ar)  # Store the larger of ar and 1/ar to simplify checks
+    else:
+        aspect_ratio = 0  # No aspect ratio constraint if not specified
+            
     errors = check_constraints(
         options["data"],
         options["label"],
@@ -68,6 +76,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
         options["boundary"],
         options["hard"],
         options["fixed"],
+        aspect_ratio,
     )
     
     if options["verbose"]:

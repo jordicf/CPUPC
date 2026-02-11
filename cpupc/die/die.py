@@ -212,15 +212,15 @@ class Die:
         :return: the YAML string in case filename is None
         """
         data: dict[str, Any] = {
-            KW.WIDTH: self.width,
-            KW.HEIGHT: self.height,
+            str(KW.WIDTH): self.width,
+            str(KW.HEIGHT): self.height,
         }
 
         regions = list[RectDescriptor]()
         for r in self.blockages + self.specialized_regions:
             regions.append(r.vector_spec)
         if len(regions) > 0:
-            data[KW.REGIONS] = regions
+            data[str(KW.REGIONS)] = regions
         return write_json_yaml(data, False, filename)
 
     def _cell_center(self, i: int, j: int) -> Point:
