@@ -1,0 +1,47 @@
+Modules: {
+    A: {
+        rectangles: [[0.5, 4.5, 1, 3]],
+        hard: true,
+        boundary: top_left,
+    },
+    B: {
+        area: 6,
+        rectangles: [[2.5, 5, 3, 2], [2, 3, 2, 2]],
+    },
+    C: {
+        area: 4,
+        rectangles: [[5, 5, 2, 2]],
+        adj_cluster: cluster1,
+    },
+
+    D: {
+        area: 3,
+        rectangles: [[5.5, 1.2, 1, 2.4]],
+        adj_cluster: cluster1,
+        mib: my_mib
+    },
+    E: {
+        rectangles: [[4.5, 3, 3, 2]],
+        hard: true,
+        mib: mib_ef,
+        boundary: left,
+    },
+    F: {
+        area: 8,
+        rectangles: [[3, 1, 4, 2]],
+        mib: mib_ef,
+    },
+    G: {
+        area: 2,
+        rectangles: [[0.5, 2, 1, 2]],
+        mib: my_mib,
+    },
+}
+
+Nets: [
+    [A, B, 5],
+    [B, C, 10],
+    [D, A, 2], 
+    [E, F, 8], 
+    [F, G, 3],
+]

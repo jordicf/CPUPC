@@ -134,7 +134,7 @@ def check_fixed_const(
     errors: list[str] = []
     for index in indices:
         if not polygons_have_same_shape(pred_sol[index], target_sol[index]):
-            errors.append(f"Module {index}: hard constraint violated")
+            errors.append(f"Module M${index}: hard constraint violated")
     return errors
 
 
@@ -160,7 +160,7 @@ def check_preplaced_const(
     for index in indices:
         intersection_area = pred_sol[index].intersection(target_sol[index]).area
         if intersection_area + threshold <= target_sol[index].area:
-            errors.append(f"Module {index}: fixed constraint violated")
+            errors.append(f"Module M${index}: fixed constraint violated")
     return errors
 
 
@@ -187,7 +187,7 @@ def check_mib_const(indices: torch.Tensor, sol: list[Polygon]) -> list[str]:
         for sind in shared_poly_ind[1:]:
             if not polygons_have_same_shape(polygon1, sol[sind]):
                 errors.append(
-                    f"Modules {shared_poly_ind[0]} and {sind} violate MIB constraint"
+                    f"Modules M${shared_poly_ind[0]} and M${sind} violate MIB constraint"
                 )
 
     return errors
@@ -215,7 +215,15 @@ def check_clust_const(indices: torch.Tensor, sol: list[Polygon]) -> list[str]:
         clust_poly = [sol[sind] for sind in shared_poly_ind]
         union = unary_union(clust_poly)
         if isinstance(union, MultiPolygon):
-            errors.append(f"Modules {shared_poly_ind} violate clustering constraint")
+            msg = (
+                "Modules "
+                + ", ".join(f"M${sind}" for sind in shared_poly_ind)
+                + " violate clustering constraint (union is not a single polygon)"
+            )
+            msg = " and".join(
+                msg.rsplit(",", 1)
+            )  # Substitute last comma by and for better readability
+            errors.append(msg)
 
     return errors
 
@@ -261,7 +269,6 @@ def check_boundary_const(
         edges_to_check = edges.get(nz_values[index], [])
 
         if not all(polygon.intersects(edge) for edge in edges_to_check):
-            errors.append(f"Module {index}: boundary constraint violated")
+            errors.append(f"Module M${index}: boundary constraint violated")
 
     return errors
-

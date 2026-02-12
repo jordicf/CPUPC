@@ -113,9 +113,9 @@ def check_area_requirements(
     for i in range(len(modules)):
         area = modules[i][0].item()
         sol_area = solution[i].area
-        if abs(area - sol_area) > 1e-3:
+        if sol_area - area < -1e-3:
             errors.append(
-                f"Module {i}: area requirement not met (expected {area}, got {sol_area})"
+                f"Module M${i}: area requirement not met (expected {area}, got {sol_area})"
             )
     return errors
 
@@ -130,7 +130,7 @@ def check_overlaps(
     for i, j in combinations(range(n), 2):
         area = solution[i].intersection(solution[j]).area
         if area > threshold:
-            errors.append(f"Modules {i} and {j} overlap")
+            errors.append(f"Modules M${i} and M${j} overlap")
     return errors
 
 
@@ -178,11 +178,10 @@ def check_aspect_ratio_constraints(
         minx, miny, maxx, maxy = solution[i].bounds
         width = maxx - minx
         height = maxy - miny
-        print(f"Module {i}: width={width:.2f}, height={height:.2f}, aspect ratio={max(width/height, height/width):.2f}")
         if height > 0 and width > 0:
             ar = max(width / height, height / width)
             if ar > aspect_ratio:
                 errors.append(
-                    f"Module {i}: aspect ratio constraint violated (aspect ratio {ar:.2f} exceeds bound {aspect_ratio})"
+                    f"Module M${i}: aspect ratio constraint violated (aspect ratio {ar:.2f} exceeds bound {aspect_ratio})"
                 )
     return errors

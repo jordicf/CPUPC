@@ -5,6 +5,7 @@
 
 import torch
 from .fsconst import FsConstraint
+from .names import name2idx, FsNames, DictNames
 from cpupc.netlist.module import Boundary
 from cpupc.netlist.netlist import Netlist
 from cpupc.geometry.fpolygon import Vertices
@@ -12,28 +13,23 @@ from cpupc.geometry.fpolygon import Vertices
 
 def write_netlist(
     net: Netlist,
-) -> tuple[list[torch.Tensor], tuple[torch.Tensor, list[torch.Tensor]]]:
+) -> tuple[list[torch.Tensor], tuple[torch.Tensor, list[torch.Tensor]], DictNames]:
     """
     Writes a netlist in the floorset format
     :param net: input netlist
-    :return: data and label tensors
+    :return: data and label tensors and dictionary with list of names
     """
 
     # Dictionaries to names into indices
-    mod2idx = _name2idx([m.name for m in net.modules if not m.is_iopin])
-    pin2idx = _name2idx([m.name for m in net.modules if m.is_iopin])
-    mib: dict[str, int] = dict()
-    adjs: dict[str, int] = dict()
+    mod2idx = name2idx([m.name for m in net.modules if not m.is_iopin])
+    pin2idx = name2idx([m.name for m in net.modules if m.is_iopin])
+    mib = name2idx([m.mib for m in net.modules if m.mib is not None], 1)
+    adjs = name2idx([m.cluster for m in net.modules if m.cluster is not None], 1)
+    
 
     # Calculate module centers
     net.calculate_centers_from_rectangles()
     assert all(m.center is not None for m in net.modules), "Some module has no center"
-
-    for m in net.modules:
-        if m.cluster is not None and m.cluster not in adjs:
-            adjs[m.cluster] = len(adjs) + 1
-        if m.mib is not None and m.mib not in mib:
-            mib[m.mib] = len(mib) + 1
 
     num_blocks = len(mod2idx)
     num_pins = len(pin2idx)
@@ -131,23 +127,11 @@ def write_netlist(
 
     label: tuple[torch.Tensor, list[torch.Tensor]] = (metrics, sol)
 
-    return data, label
+    names: DictNames = {
+        str(FsNames.MODULES): sorted(mod2idx, key=lambda x: mod2idx[x]),
+        str(FsNames.PINS): sorted(pin2idx, key=lambda x: pin2idx[x]),
+        str(FsNames.MIB): sorted(mib, key=lambda x: mib[x]),
+        str(FsNames.CLUSTER): sorted(adjs, key=lambda x: adjs[x]),
+    }
 
-
-def _name2idx(names: list[str]) -> dict[str, int]:
-    """Helper function to convert a list of names into a dictionary of name to index.
-    The names are sorted by their numerical suffix (if it exists) and then by their name.
-    """
-    name_idx = [(name, _str_suffix(name)) for name in names]
-    name_idx.sort(key=lambda x: (x[1], x[0]))
-    return {name: i for i, (name, _) in enumerate(name_idx)}
-
-
-def _str_suffix(s: str) -> int:
-    """Helper function to extract the numerical suffix of a string.
-    In case there is no numerical suffix, -1 is returned.
-    For example, for "M_10" it returns 10, for "P_5" it returns 5, and for "M_fixed" it returns -1.
-    """
-    temp_idx = s.rfind(next(filter(lambda x: not x.isdigit(), s[::-1])))
-    suffix = s[temp_idx + 1 :]
-    return int(suffix) if suffix.isdigit() else -1
+    return data, label, names

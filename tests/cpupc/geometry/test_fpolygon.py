@@ -117,17 +117,23 @@ class TestFPolygon(unittest.TestCase):
 
 
 class TestVertices(unittest.TestCase):
-
-    def setUp(self) -> None:
+    p1: FPolygon
+    p2: FPolygon
+    p3: FPolygon
+    p4: FPolygon
+    solution1: list[tuple[float, float]]
+    
+    @classmethod
+    def setUpClass(cls) -> None:
         # A simple polygon
-        self.p1 = FPolygon([
+        cls.p1 = FPolygon([
             XY_Box(0, 4, 2, 5),
             XY_Box(2, 4, 2, 7),
             XY_Box(3, 6, 0, 2),
             XY_Box(4, 6, 0, 8),
         ])
         
-        self.solution1 = [
+        cls.solution1 = [
             (0.0, 2.0),
             (0.0, 5.0),
             (2.0, 5.0),
@@ -141,13 +147,13 @@ class TestVertices(unittest.TestCase):
         ]
 
         # A disconnected polygon
-        self.p2 = FPolygon([
+        cls.p2 = FPolygon([
             XY_Box(0, 2, 0, 2),
             XY_Box(3, 5, 3, 5),
         ])
 
         # A polygon with a hole
-        self.p3 = FPolygon([
+        cls.p3 = FPolygon([
             XY_Box(0, 1, 0, 3),
             XY_Box(2, 3, 0, 3),
             XY_Box(0, 3, 0, 1),
@@ -155,7 +161,7 @@ class TestVertices(unittest.TestCase):
         ])
 
         # A complex polygon
-        self.p4 = FPolygon([
+        cls.p4 = FPolygon([
             XY_Box(1, 4, 6, 7),
             XY_Box(0, 2, 2, 4),
             XY_Box(2, 4, 2, 6),
