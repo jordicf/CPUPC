@@ -46,8 +46,8 @@ def parse_options(
     parser.add_argument(
         "--accept",
         type=float,
-        default=0.2,
-        help="initial acceptance probability for new solutions. Default: 0.2",
+        default=0.5,
+        help="initial acceptance probability for new solutions. Default: 0.5",
     )
     parser.add_argument(
         "--tfactor",

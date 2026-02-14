@@ -15,7 +15,7 @@ def _possible_overlap(S1: float, S2: float, c1: float, c2: float,
     the rectangles, as you can make one "very horizontal" and the other one
     "very vertical".
 
-    The aspect ratio is defined as the height / width of the rectangles.
+    The aspect ratio is defined as the width / height of the rectangles.
 
     Params:
         S1, S2: areas of R1 and R2
@@ -34,10 +34,10 @@ def _possible_overlap(S1: float, S2: float, c1: float, c2: float,
     g = lambda x: c2 - S2/(c1 - x) # concave
     h = lambda x: f(x) - g(x) # also convex
 
-    xmax1 : float = np.sqrt(S1 / a1min) # maximum reachable x coordinate of R1
-    xmin1 : float = np.sqrt(S1 / a1max) # minimum reachable x coordinate of right side of R1
-    xmin2 : float = c1 - np.sqrt(S2 / a2min)
-    xmax2 : float = c1 - np.sqrt(S2 / a2max)
+    xmax1 : float = np.sqrt(S1 * a1max) # maximum reachable x coordinate of R1
+    xmin1 : float = np.sqrt(S1 * a1min) # minimum reachable x coordinate of right side of R1
+    xmin2 : float = c1 - np.sqrt(S2 * a2max)
+    xmax2 : float = c1 - np.sqrt(S2 * a2min)
 
     if c2 == 0: # simple case, rectangles are aligned
         return xmax1 > xmin2
@@ -129,7 +129,7 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
 
         xj, yj, wj, hj = centers[j][0], centers[j][1], w[j], h[j]
         Aj: float = hj * wj
-        ar_j: float = hj / wj
+        ar_j: float = wj / hj
 
         if _possible_overlap(Ai/4, Aj/4, abs(xi - xj), abs(yi - yj), ar_max_i,
                             ar_min_i, ar_j, ar_j):
@@ -137,9 +137,7 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
             # hi and wi, leaving hj, wj fixed, then add "j" to the set
             overlap_candidates.add(j)
 
-    # define objective function
-    # Naive idea: sum_{j in {1,...,N}\i} overlap(i,j)
-    # Faster approach: sum_{j in overlap_candidates} overlap(i,j)
+    # define objective function: sum_{j in {1,...,N}\i} overlap(i,j)
     def overlap(h: list[float], w: list[float], 
                 centers: list[tuple[float, float]], i: int,
                 overlap_candidates: set[int]):
@@ -149,7 +147,8 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
     min_overlap: float = overlap(h, w, centers, i, overlap_candidates)
     best_w: float = wi
 
-    wmin, wmax = np.sqrt(Ai / ar_max_i), np.sqrt(Ai / ar_min_i) # width bounds
+    # Width bounds for AR = w/h => w = sqrt(A * AR)
+    wmin, wmax = np.sqrt(Ai * ar_min_i), np.sqrt(Ai * ar_max_i)
 
     while True:
         width_lspace = np.linspace(wmin, wmax, M)
@@ -167,6 +166,7 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
             min_overlap = overlaps[j_best]
             best_w = width_lspace[j_best]
             
+            # zoom into interval around best width
             wmin = width_lspace[max(0, j_best - 1)]
             wmax = width_lspace[min(M - 1, j_best + 1)]
         else:
