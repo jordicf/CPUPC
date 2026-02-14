@@ -78,7 +78,7 @@ class swapNetlist:
     _verbose: bool  # Verbosity flag
 
     def __init__(
-        self, filename: str, split_net_factor: float = 1.0,
+        self, filename: str | Netlist, split_net_factor: float = 1.0,
         split_threshold: float = 0.5, star_model: bool = False,
         verbose: bool = False
     ) -> None:
@@ -88,7 +88,12 @@ class swapNetlist:
         self._idx2name = []
         self._movable = []
         self._areas = []
-        self._netlist = Netlist(filename)
+        
+        if isinstance(filename, Netlist):
+            self._netlist = filename
+        else:
+            self._netlist = Netlist(filename)
+            
         self._avg_area = 0.0
         self._num_subblocks = 0
         self._split_net_factor = split_net_factor

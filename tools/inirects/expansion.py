@@ -1,24 +1,37 @@
-import networkx as nx
 import numpy as np
 from .repel_rectangles import repel_rectangles
 from .pseudo_solver import solve_widths
+from cpupc.netlist.netlist import Netlist
+from cpupc.geometry.geometry import Shape, Rectangle
 
 # weighted center of mass aproach
 
-def set_heights_widths(G: nx.Graph, h: np.ndarray, w: np.ndarray,
+def set_heights_widths(netlist: Netlist, h: np.ndarray, w: np.ndarray,
                        original_idx: list[int]) -> None:
     N: int = len(h)
 
     for i in range(N):
-        G.nodes[original_idx[i]]['height'] = h[i]
-        G.nodes[original_idx[i]]['width'] = w[i]
+        idx = original_idx[i]
+        module = netlist.modules[idx]
 
-def set_centers(G: nx.Graph, centers: np.ndarray,
-                 original_idx: list[int]) -> None:
+        assert not module.is_iopin # sanity check
+        if not module.is_fixed and not module.is_hard:
+            center = module.center
+            module._rectangles = [
+                Rectangle(center=center, shape=Shape(float(w[i]), float(h[i])), 
+                          fixed=module.is_fixed, hard=module.is_hard)
+            ]
+
+def set_centers(netlist: Netlist, centers: np.ndarray,
+                original_idx: list[int]) -> None:
+    mod_centers = {}
     N: int = len(centers)
-
     for i in range(N):
-        G.nodes[original_idx[i]]['center'] = centers[i].copy()
+        idx = original_idx[i]
+        module = netlist.modules[idx]
+        mod_centers[module.name] = (float(centers[i][0]), float(centers[i][1]))
+    
+    netlist.update_centers(mod_centers)
 
 def pairwise_overlap(centers: np.ndarray,
                       h: np.ndarray, w: np.ndarray,
@@ -52,7 +65,7 @@ def total_overlap(centers: np.ndarray,
 
 def ar_bounds(centers: np.ndarray, areas: np.ndarray, 
                ar_min: list[float], ar_max: list[float], H: float, 
-               W: float) -> tuple[list[float], list[float]]:
+               W: float) -> tuple[np.ndarray, np.ndarray]:
     """
     Finds the minimum and maximum aspect ratio each rectangle can
     have, given its center, so as not to exceed the die bound.
@@ -80,26 +93,20 @@ def ar_bounds(centers: np.ndarray, areas: np.ndarray,
         w_bound: float = min(x, W - x) # largest possible half-width
         h_bound: float = min(y, H - y) # largest possible half-height
 
-        if w_bound == 0 or h_bound == 0:
+        if w_bound == 0 or h_bound == 0: # only happens with terminals
             min_AR.append(1)
             max_AR.append(1)
             continue
-        
-        ar_min_i: float = max(A / (4 * w_bound**2), ar_min[i]) # A / (4 * w_bound**2) is the aspect ratio at the max width
-        ar_max_i: float = min((4 * h_bound**2) / A, ar_max[i]) # (4 * h_bound**2) / A is the aspect ratio at the max height
+                
+        ar_min_i: float = max(A / (4 * h_bound**2), ar_min[i])
+        ar_max_i: float = min((4 * w_bound**2) / A, ar_max[i])
         min_AR.append(ar_min_i)
         max_AR.append(ar_max_i)
     
-    min_AR = np.array(min_AR)
-    max_AR = np.array(max_AR)
+    return np.array(min_AR), np.array(max_AR)
 
-    return min_AR, max_AR
-
-def expand(G: nx.Graph, centers: np.ndarray, heights: np.ndarray, 
-           widths: np.ndarray, areas: np.ndarray, 
-           ar_min: np.ndarray, ar_max: np.ndarray, H: float, W: float,
-           fixed: set[int] = {}, hyperparams: dict = {}) -> None:
-    
+def expand(netlist: Netlist, H: float, W: float,
+           hyperparams: dict = {}) -> None:
     hyperparams = hyperparams.get('expansion', {})
 
     # update epsilon
@@ -107,28 +114,45 @@ def expand(G: nx.Graph, centers: np.ndarray, heights: np.ndarray,
                                  hyperparams.get('epsilon_decay', 1),
                                  hyperparams.get('min_epsilon', 1e-5))
     
-    # remove the terminals, as they have no area
-    mask = np.ones(len(centers), dtype=bool)
+    # extract data from netlist to arrays for speed
+    centers = []
+    heights = []
+    widths = []
+    areas = []
+    ar_min = []
+    ar_max = []
     original_idx = []
-    new_fixed = set[int]()
+    fixed = set()
 
-    for v in G.nodes:
-        if G.nodes[v].get('terminal', False):
-            mask[v] = False
-        else:
-            original_idx.append(v)
-            if v in fixed:
-                new_fixed.add(len(original_idx) - 1)
-
-    # update function arguments
-    centers = centers.copy()[mask]
-    heights = heights.copy()[mask]
-    widths = widths.copy()[mask]
-    areas = areas.copy()[mask]
-    ar_min = ar_min.copy()[mask]
-    ar_max = ar_max.copy()[mask]
-    fixed = new_fixed
+    for i, m in enumerate(netlist.modules):
+        if m.is_iopin:
+            continue
         
+        r = m.rectangles[0]
+        centers.append(np.array([r.center.x, r.center.y]))
+        heights.append(r.shape.h)
+        widths.append(r.shape.w)
+        areas.append(m.area())
+        
+        min_ar = 1 / 3 # default values
+        max_ar = 3
+        if m.aspect_ratio:
+            min_ar = m.aspect_ratio.min_wh
+            max_ar = m.aspect_ratio.max_wh
+        ar_min.append(min_ar)
+        ar_max.append(max_ar)
+
+        original_idx.append(i)
+        if m.is_fixed:
+            fixed.add(len(centers) - 1)
+
+    centers = np.array(centers)
+    heights = np.array(heights)
+    widths = np.array(widths)
+    areas = np.array(areas)
+    ar_min = np.array(ar_min)
+    ar_max = np.array(ar_max)
+
     epsilon: float = hyperparams.get('epsilon', 1e-5) * H * W
 
     overlap: float = total_overlap(centers, heights, widths)
@@ -150,10 +174,10 @@ def expand(G: nx.Graph, centers: np.ndarray, heights: np.ndarray,
 
         if overlap > prev_overlap - epsilon:
             break
-    
+                
     if overlap > prev_overlap:
-        set_centers(G, old_centers, original_idx)
-        set_heights_widths(G, old_h, old_w, original_idx)
+        set_centers(netlist, old_centers, original_idx)
+        set_heights_widths(netlist, old_h, old_w, original_idx)
     else:
-        set_centers(G, centers, original_idx)
-        set_heights_widths(G, heights, widths, original_idx)
+        set_centers(netlist, centers, original_idx)
+        set_heights_widths(netlist, heights, widths, original_idx)

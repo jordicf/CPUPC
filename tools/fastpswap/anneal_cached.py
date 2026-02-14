@@ -106,13 +106,12 @@ def simulated_annealing(
     
     for i in range(n_orig_movable):
         module = net.idx2module(central_idxs[i])
-        min_x = module.rectangles[0].w / 2
-        min_y = module.rectangles[0].h / 2
+        min_x = module.rectangles[0].shape.w / 2
+        min_y = module.rectangles[0].shape.h / 2
 
         net.points[central_idxs[i]].x = max(min_x, float(final_positions[i, 0]))
         net.points[central_idxs[i]].y = max(min_y, float(final_positions[i, 1]))
 
-    # plot_netlist(net, show=True)
 
 @njit(cache=True)
 def jit_simulated_annealing(
@@ -232,8 +231,6 @@ def jit_simulated_annealing(
         if avg >= best_avg and current_dispersion >= best_dispersion:
             no_improvement += 1
         else:
-            if avg >= best_avg:
-                print("The second stopping condition delayed the end of the algorithm")
             no_improvement = 0
             best_avg = avg
             best_dispersion = current_dispersion
