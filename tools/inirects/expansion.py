@@ -3,6 +3,7 @@ from .repel_rectangles import repel_rectangles
 from .pseudo_solver import solve_widths
 from cpupc.netlist.netlist import Netlist
 from cpupc.geometry.geometry import Shape, Rectangle
+from collections import defaultdict
 
 # weighted center of mass aproach
 
@@ -107,25 +108,29 @@ def ar_bounds(centers: np.ndarray, areas: np.ndarray,
 
 def expand(netlist: Netlist, H: float, W: float,
            hyperparams: dict = {}) -> None:
+    """
+    Expands the rectangles in the netlist to reduce overlap, and
+    reshapes them. Pins are ignored in this stage.
+    """
     hyperparams = hyperparams.get('expansion', {})
-
-    # update epsilon
-    hyperparams['epsilon'] = max(hyperparams.get('epsilon', 1e-5) * \
-                                 hyperparams.get('epsilon_decay', 1),
-                                 hyperparams.get('min_epsilon', 1e-5))
     
     # extract data from netlist to arrays for speed
+    # modules are given indices 0, 1, ... N-1 in the same order as the netlist,
+    # but skipping the pins
     centers = []
     heights = []
     widths = []
     areas = []
     ar_min = []
     ar_max = []
-    original_idx = []
+    original_idx = [] # maps 0..N-1 to original module indices
     fixed = set()
+    # maps MIB name to list of module indices, ONLY for soft modules
+    # soft modules not in an MIB are given their own exclusive MIB
+    mib_dict: dict[str, list[int]] = defaultdict(list)
 
     for i, m in enumerate(netlist.modules):
-        if m.is_iopin:
+        if m.is_iopin: # filter out pins
             continue
         
         r = m.rectangles[0]
@@ -143,8 +148,18 @@ def expand(netlist: Netlist, H: float, W: float,
         ar_max.append(max_ar)
 
         original_idx.append(i)
+
         if m.is_fixed:
             fixed.add(len(centers) - 1)
+        
+        if m.mib:
+            assert not (m.is_hard or m.is_fixed), "MIB modules must be soft and not fixed"
+            mib_dict[m.mib].append(len(centers) - 1)
+
+        elif not m.is_hard: 
+            # soft modules not in an MIB are given their own exclusive MIB
+            assert m.name not in mib_dict
+            mib_dict[m.name].append(len(centers) - 1)
 
     centers = np.array(centers)
     heights = np.array(heights)
@@ -152,6 +167,10 @@ def expand(netlist: Netlist, H: float, W: float,
     areas = np.array(areas)
     ar_min = np.array(ar_min)
     ar_max = np.array(ar_max)
+    # partition of soft module indices in [0..N-1] into MIB's
+    # i.e union(mib_clusters[i]) = {j | j is neither fixed nor hard}
+    mib_clusters: list[list[int]] = list(mib_dict.values())
+
 
     epsilon: float = hyperparams.get('epsilon', 1e-5) * H * W
 
@@ -168,7 +187,7 @@ def expand(netlist: Netlist, H: float, W: float,
         min_AR, max_AR = ar_bounds(centers, areas, ar_min, ar_max, H, W)
 
         heights, widths = solve_widths(centers, heights, widths, areas, min_AR,
-                                       max_AR, fixed, hyperparams)
+                                       max_AR, mib_clusters, hyperparams)
 
         overlap: float = total_overlap(centers, heights, widths)
 
@@ -181,3 +200,8 @@ def expand(netlist: Netlist, H: float, W: float,
     else:
         set_centers(netlist, centers, original_idx)
         set_heights_widths(netlist, heights, widths, original_idx)
+
+    # update epsilon
+    hyperparams['epsilon'] = max(hyperparams.get('epsilon', 1e-5) * \
+                                 hyperparams.get('epsilon_decay', 1),
+                                 hyperparams.get('min_epsilon', 1e-5))

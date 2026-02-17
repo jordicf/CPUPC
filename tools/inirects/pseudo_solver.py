@@ -80,13 +80,13 @@ def _pairwise_overlap(h: np.ndarray, w: np.ndarray,
     return h_overlap * v_overlap
 
 def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray, 
-                               centers: np.ndarray, i: int,
-                               ar_max_i: float, ar_min_i: float,
-                               fixed: set[int] = set()) -> float:
-    """
-    Given a layout and a rectangle 'i', it finds the width of rectangle
-    'i' that minimizes the total overlap of the layout. The height
-    of the rectangle is scaled to mantain a constant area.
+                               centers: np.ndarray, mib: list[int],
+                               ar_max: float, ar_min: float,
+                               ) -> float:
+    """          
+    Given a layout and a set of rectangles 'mib', it finds the width of
+    the rectangles in 'mib' that minimizes the total overlap of the layout.
+    The height of the rectangles in 'mib' is scaled to mantain a constant area.
     All the other rectangle widths (& heights) are not modified,
     so this computation is somewhat similar to a partial derivative.
     All rectangle centers remain unchanged.
@@ -101,64 +101,77 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
         h, w: list of heights and widths of every rectangle. Since areas
               are constant, given one variable you have the other.
         centers: list of (x,y) coordinates of the center of every rectangle
-        i: index of the rectangle w.r.t the pseudo partial derivative is 
+        mib: list of indices of the rectangles w.r.t the pseudo partial derivative is 
            calculated.
-        ar_max_i, ar_min_i: aspect ratio bounds for the i-th rectangle
+        ar_max, ar_min: aspect ratio bounds for the rectangles in mib
 
     Returns:
-        best found value for the i-th width
+        best found value for the width of the rectangles in mib
     """
-
-    if i in fixed:
-        return w[i]
 
     # sampling resolution hyperparameter
     M: int = 5
-
     N: int = len(w)
 
-    xi, yi, wi, hi = centers[i][0], centers[i][1], w[i], h[i]
-    Ai: float = hi * wi
+    # area, height & width are the same for every module in the mib
+    width, height = w[mib[0]], h[mib[0]]
+    area: float = width * height
 
-    # find all rectangles that can overlap with R_i if R_i is reshaped.
-    overlap_candidates = set()
+    # find all pairs of modules that can overlap if the widths of the mib modules are modified.
+    # evidently, at least one module must be in the mib
+    overlap_candidates: set[tuple[int, int]] = set()
 
-    for j in range(N):
-        if j == i:
-            continue
+    for i in mib:
+        xi, yi = centers[i][0], centers[i][1]
+        Ai = area
+        wi, hi = width, height
 
-        xj, yj, wj, hj = centers[j][0], centers[j][1], w[j], h[j]
-        Aj: float = hj * wj
-        ar_j: float = wj / hj
+        for j in range(N):
+            if j == i:
+                continue
 
-        if _possible_overlap(Ai/4, Aj/4, abs(xi - xj), abs(yi - yj), ar_max_i,
-                            ar_min_i, ar_j, ar_j):
-            # if rectangle "i" can overlap with rectangle "j" for some
-            # hi and wi, leaving hj, wj fixed, then add "j" to the set
-            overlap_candidates.add(j)
+            xj, yj, wj, hj = centers[j][0], centers[j][1], w[j], h[j]
+            Aj: float = hj * wj
+            ar_j: float = wj / hj
 
-    # define objective function: sum_{j in {1,...,N}\i} overlap(i,j)
+            if j in mib:
+                # if rectangle "i" can overlap with rectangle "j" for some
+                # wi, wj assignment, add (i,j) to the set
+                if i < j and \
+                    _possible_overlap(Ai/4, Aj/4, abs(xi - xj), abs(yi - yj), ar_max,
+                                      ar_min, ar_max, ar_min):
+                    overlap_candidates.add((i, j))
+
+            else:
+                if _possible_overlap(Ai/4, Aj/4, abs(xi - xj), abs(yi - yj), ar_max,
+                                    ar_min, ar_j, ar_j):
+                    # if rectangle "i" can overlap with rectangle "j" for some
+                    # hi and wi, leaving hj, wj fixed, then add "j" to the set
+                    overlap_candidates.add((i, j))
+
+    # define objective function: sum_{(i,j) in overlap_candidates} overlap(i,j)
+    # Note that this is equivalent to minimizing sum_{i,j in {1,...,N}} overlap(i,j)
     def overlap(h: list[float], w: list[float], 
-                centers: list[tuple[float, float]], i: int,
-                overlap_candidates: set[int]):
-        return sum(_pairwise_overlap(h, w, centers, i, j) for j in overlap_candidates)
+                centers: list[tuple[float, float]],
+                overlap_candidates: set[tuple[int, int]]) -> float:
+        return sum(_pairwise_overlap(h, w, centers, i, j) for i,j in overlap_candidates)
     
     # minimize the objective function using a discrete sampling approach
-    min_overlap: float = overlap(h, w, centers, i, overlap_candidates)
-    best_w: float = wi
+    min_overlap: float = overlap(h, w, centers, overlap_candidates)
+    best_w: float = width
 
     # Width bounds for AR = w/h => w = sqrt(A * AR)
-    wmin, wmax = np.sqrt(Ai * ar_min_i), np.sqrt(Ai * ar_max_i)
+    wmin, wmax = np.sqrt(area * ar_min), np.sqrt(area * ar_max)
 
     while True:
         width_lspace = np.linspace(wmin, wmax, M)
         overlaps = list[float]()
         
         for j in range(M):
-            w[i] = width_lspace[j]
-            h[i] = Ai / w[i]
+            w[mib] = width_lspace[j]
+            h[mib] = area / w[mib]
 
-            overlaps.append(overlap(h, w, centers, i, overlap_candidates))
+            overlaps.append(overlap(h, w, centers, overlap_candidates))
 
         j_best: int = np.argmin(overlaps)
 
@@ -173,14 +186,14 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
             break
 
     # revert h_i, w_i variables to their original value
-    w[i] = wi
-    h[i] = hi
+    w[mib] = width
+    h[mib] = height
     
     return best_w
 
 def _pseudo_gradient_serial(h: np.ndarray, w: np.ndarray, 
                             centers: np.ndarray, min_AR: list[float], 
-                            max_AR: list[float], fixed: set[int] = {}):
+                            max_AR: list[float], mib_clusters: list[list[int]]):
     """
     Compute 'gradient' using a plain Python loop
 
@@ -189,31 +202,36 @@ def _pseudo_gradient_serial(h: np.ndarray, w: np.ndarray,
         centers: list of (x, y) centers
         min_AR, max_AR: list with the max/min aspect ratio for 
                         each rectange
-        fixed: set of fixed modules (they can't have
-               their shapes modified)
+        mib_clusters: list of mibs. modules not in an mib appear in a
+                      singleton list
     
     """
     N = len(w)
-    return np.array([
+    results = [
         _pseudo_partial_derivative(
-            h, w, centers, i,
-            ar_max_i=max_AR[i], ar_min_i=min_AR[i], fixed=fixed
-        ) for i in range(N)
-    ])
+            h, w, centers, mib_clusters[i],
+            ar_max=max_AR[mib_clusters[i][0]], ar_min=min_AR[mib_clusters[i][0]]
+        ) for i in range(len(mib_clusters))
+    ]
 
-def _parallel_worker(args):
+    pseudo_gradient = w.copy()
+    for i, cluster in enumerate(mib_clusters):
+        pseudo_gradient[cluster] = results[i]
+    return pseudo_gradient
+
+def _parallel_worker(args) -> float:
     """Helper so executor.map can pickle arguments cleanly."""
-    h, w, centers, i, ar_min_i, ar_max_i, fixed = args
+    h, w, centers, mib_cluster, ar_min_i, ar_max_i = args
     # pass copies of h, w; as they are modified in the function
     return _pseudo_partial_derivative(
-        h.copy(), w.copy(), centers, i,
-        ar_max_i=ar_max_i, ar_min_i=ar_min_i, fixed=fixed
+        h.copy(), w.copy(), centers, mib_cluster,
+        ar_max_i, ar_min_i
     )
 
 def _pseudo_gradient_parallel(
         h: np.ndarray, w: np.ndarray, centers: np.ndarray, 
         min_AR: np.ndarray, max_AR: np.ndarray, 
-        fixed: set[int] = {}, max_workers=4):
+        mib_clusters: list[list[int]], max_workers=4) -> np.ndarray:
     """
     Parallel version of _pseudo_gradient_serial(). Slower
     for small netlist sizes.
@@ -223,19 +241,25 @@ def _pseudo_gradient_parallel(
         centers: list of (x, y) centers
         min_AR, max_AR: list with the max/min aspect ratio for 
                         each rectange
-        fixed: set of fixed modules (they can't have
-               their shapes modified)
+        mib_clusters: list of lists of indices of modules that must have the 
+                      same shape.
         max_workers: number of processes (defaults to os.cpu_count()).
     """
-    N = len(w)
-    tasks = [(h, w, centers, i, min_AR[i], max_AR[i], fixed) for i in range(N)]
+    N: int = len(centers)
+    tasks = [(h, w, centers, mib_clusters[i], min_AR[mib_clusters[i][0]], max_AR[mib_clusters[i][0]]) \
+             for i in range(len(mib_clusters))]
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         results = list(executor.map(_parallel_worker, tasks))
-    return np.array(results)
+    
+    pseudo_gradient = w.copy()
+    for i, cluster in enumerate(mib_clusters):
+        pseudo_gradient[cluster] = results[i]
+
+    return pseudo_gradient
 
 def solve_widths(centers: np.ndarray, h: np.ndarray, 
                  w: np.ndarray, areas: np.ndarray, min_AR: list[float], 
-                 max_AR: list[float], fixed: set[int] = set() ,
+                 max_AR: list[float], mib_clusters: list[list[int]] ,
                  hyperparams: dict = {},
                 ) -> tuple[np.ndarray, np.ndarray]:
     """
@@ -248,6 +272,8 @@ def solve_widths(centers: np.ndarray, h: np.ndarray,
         min_AR: minimum aspect ratio (height/width) for each rectangle.
                 This bound can be different for different rectangles.
         max_AR: maximum aspect ratio for each rectangle
+        mib_clusters: list of lists of indices of modules that must have the 
+                      same shape.
         hyperparams: dictionary with hyperparameters
             -'epsilon': float: threshold to consider that a stationary point
                                has been reached
@@ -268,7 +294,7 @@ def solve_widths(centers: np.ndarray, h: np.ndarray,
     pseudo_gradient = _pseudo_gradient_parallel if parallel else _pseudo_gradient_serial
 
     delta_w: np.ndarray = pseudo_gradient(h, w, centers, min_AR, 
-                                          max_AR, fixed) - w
+                                          max_AR, mib_clusters) - w
     
     w_new: np.ndarray = w + lr * delta_w
 
@@ -281,7 +307,7 @@ def solve_widths(centers: np.ndarray, h: np.ndarray,
     while similarity < 1 - epsilon:
         lr *= lr_decay
         delta_w = pseudo_gradient(h, w, centers, min_AR, 
-                                  max_AR, fixed) - w
+                                  max_AR, mib_clusters) - w
     
         w_new = w + lr * delta_w
         
