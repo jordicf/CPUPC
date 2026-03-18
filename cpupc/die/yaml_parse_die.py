@@ -2,7 +2,7 @@
 # For the CPUPC Project.
 # Licensed under the MIT License (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
-from typing import Optional
+from typing import Any, Optional
 from cpupc.geometry.geometry import Point, Shape, Rectangle
 from cpupc.utils.keywords import KW
 from cpupc.utils.utils import (
@@ -52,9 +52,11 @@ def parse_die(
     if isinstance(stream, str):
         shape = string_die(stream)
         if shape is not None:
-            die = Rectangle(
-                **{KW.CENTER: Point(shape.w / 2, shape.h / 2), KW.SHAPE: shape}
-            )
+            kwargs: dict[str, Any] = {
+                KW.CENTER: Point(shape.w / 2, shape.h / 2),
+                KW.SHAPE: shape,
+            }
+            die = Rectangle(**kwargs)
             return die, list[Rectangle](), None
 
     # Check whether the string is a filename (one line) or a YAML text
@@ -79,7 +81,11 @@ def parse_die(
     shape = Shape(tree[KW.WIDTH], tree[KW.HEIGHT])
     assert is_number(shape.w) and shape.w > 0, "Die: wrong specification of the width"
     assert is_number(shape.h) and shape.h > 0, "Die: wrong specification of the height"
-    die = Rectangle(**{KW.CENTER: Point(shape.w / 2, shape.h / 2), KW.SHAPE: shape})
+    kwargs = {
+        KW.CENTER: Point(shape.w / 2, shape.h / 2),
+        KW.SHAPE: shape,
+    }
+    die = Rectangle(**kwargs)
 
     # Get the specialized regions and blockages of the die
     regions = list[Rectangle]()
@@ -87,7 +93,7 @@ def parse_die(
         rlist = tree[KW.REGIONS]
         assert (
             isinstance(rlist, list) and len(rlist) > 0
-        ), f"Incorrect specification of die rectangles"
+        ), "Incorrect specification of die rectangles"
         if is_number(rlist[0]):
             rlist = [rlist]  # List with only one rectangle
         for r in rlist:
@@ -129,7 +135,7 @@ def parse_die_rectangle(r: list) -> Rectangle:
         valid_identifier(r[4]) or r[4] == KW.GROUND or r[4] == KW.BLOCKAGE
     ), f"Invalid identifier for die region: {r[4]}"
     assert r[4] != KW.GROUND, "Only non-ground regions can be specified in the die"
-    kwargs = {
+    kwargs: dict[str, Any] = {
         KW.CENTER: Point(r[0], r[1]),
         KW.SHAPE: Shape(r[2], r[3]),
         KW.REGION: r[4],
@@ -150,7 +156,7 @@ def parse_pin_segment(name: str, r: list) -> Rectangle:
     assert all(
         is_number(x) and x >= 0 for x in r
     ), "Die: incorrect value of pin segment for {name}"
-    kwargs = {
+    kwargs: dict[str, Any] = {
         KW.CENTER: Point(r[0], r[1]),
         KW.SHAPE: Shape(r[2], r[3]),
     }

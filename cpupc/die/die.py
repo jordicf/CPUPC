@@ -321,7 +321,7 @@ class Die:
         y_center = (self._y[best_reg.rmin] + self._y[best_reg.rmax + 1]) / 2
         width = self._x[best_reg.cmax + 1] - self._x[best_reg.cmin]
         height = self._y[best_reg.rmax + 1] - self._y[best_reg.rmin]
-        kwargs = {
+        kwargs: dict[str, Any] = {
             KW.CENTER: Point(x_center, y_center),
             KW.SHAPE: Shape(width, height),
             KW.REGION: KW.GROUND,

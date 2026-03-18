@@ -446,15 +446,14 @@ class Rectangle:
         Creates a duplication of the rectangle
         :return: the rectangle
         """
-        return Rectangle(
-            **{
-                KW.CENTER: self.center,
-                KW.SHAPE: self.shape,
-                KW.FIXED: self.fixed,
-                KW.HARD: self.hard,
-                KW.REGION: self.region,
-            }
-        )
+        kwargs: dict[str, Any] = {
+            KW.CENTER: self.center,
+            KW.SHAPE: self.shape,
+            KW.FIXED: self.fixed,
+            KW.HARD: self.hard,
+            KW.REGION: self.region,
+        }
+        return Rectangle(**kwargs)
 
     @property
     def bounding_box(self) -> BoundingBox:
