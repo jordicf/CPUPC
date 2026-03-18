@@ -60,7 +60,8 @@ packages = [
     "tools.fastpswap",
     "tools.inipoints",
     "tools.inirects",
-    "tools.all",
+    "tools.run",
+    "tools.spectral",
     "tools.floor_designer"
 ]
 

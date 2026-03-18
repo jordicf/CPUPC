@@ -15,12 +15,11 @@ These solvers use general-purpose nonlinear programming (NLP) to handle complex,
 1. **`legalizer.py`** - GEKKO-based local/global legalizer
 2. **`glb_legalizer.py`** - CasADi-based global legalizer
 
-### Convex Optimization Solvers (Geometric Programming)
+### Convex Optimization Solver
 
-These solvers transform the legalization problem into a convex optimization problem by using Geometric Programming (GP) in log-space:
+This toolkit provides one convex solver:
 
-1. **`gp_area_legalizer.py`** - Minimize total bounding box area
-2. **`gp_wl_legalizer.py`** - Minimize relative stretch (wirelength proxy)
+1. **`cvx_gp_lse.py`** - Mixed-space convex legalizer (LSE-HPWL objective)
 
 ---
 
@@ -226,172 +225,76 @@ python tools/legalizer/glb_legalizer.py \
 
 ---
 
-## 2. Convex Optimization Solvers (Geometric Programming)
+## 2. Convex Optimization Solver (`cvx_gp_lse.py`)
 
-### Mathematical Background
+`cvx_gp_lse.py` implements a **mixed-space convex floorplanning model** using CasADi + IPOPT.
 
-**Geometric Programming (GP)** is a special class of optimization problems that can be transformed into **convex problems** by applying a logarithmic change of variables. The key advantage is **global optimality** guarantee and fast convergence.
+### Mathematical Formulation
 
-**GP Standard Form:**
+The model uses hybrid variables:
+
+- **Linear space**: module centers `x_i`, `y_i`
+- **Log space**: module dimensions `W_i = ln(w_i)`, `H_i = ln(h_i)`
+
+Recovered physical dimensions:
+
+- `w_i = exp(W_i)`
+- `h_i = exp(H_i)`
+
+Objective is LSE-HPWL (smooth wirelength):
+
 ```
-minimize    f₀(x)
-subject to  fᵢ(x) ≤ 1,  i = 1, ..., m
-            gⱼ(x) = 1,   j = 1, ..., p
-```
-
-where `f` are posynomials (sums of monomials with positive coefficients) and `g` are monomials.
-
-**Log-Space Transformation:**
-By substituting `xᵢ = exp(yᵢ)`, the problem becomes:
-```
-minimize    log(f₀(exp(y)))
-subject to  log(fᵢ(exp(y))) ≤ 0
-            log(gⱼ(exp(y))) = 0
-```
-
-This is a **convex optimization problem** in log-space, solvable by interior-point methods with polynomial-time complexity.
-
----
-
-### 2.1 `gp_area_legalizer.py` - Area Minimization via GP
-
-**Objective:** Minimize total bounding box area (`W_chip × H_chip`)  
-**Optimization Type:** Geometric Programming (convex in log-space)  
-**Use Case:** Shape optimization, area-driven legalization
-
-#### Key Features
-
-- **Convex Optimization**: Guaranteed global optimum
-- **Pure Shape Optimization**: Focuses on module sizes and bounding box
-- **No Wirelength Term**: Only considers geometric constraints
-- **Fast Convergence**: Interior-point solver converges in few iterations
-- **Log-Space Formulation**: All variables and constraints in exponential form
-
-#### Optimization Formulation
-
-**Variables (in log-space):**
-- `x_i, y_i`: Log of module center coordinates
-- `w_i, h_i`: Log of module width/height
-- `W_chip, H_chip`: Log of chip width/height
-
-**Objective:**
-```
-minimize  W_chip · H_chip
+min Σ_k ω_k · α · [ log Σ exp(x_i/α) + log Σ exp(−x_i/α)
+                   + log Σ exp(y_i/α) + log Σ exp(−y_i/α) ]
 ```
 
-**Constraints:**
-1. **Area constraints**: `w_i · h_i = A_i` (module area)
-2. **Aspect ratio**: `1/r_max ≤ h_i/w_i ≤ r_max`
-3. **Non-overlap** (GP form): Via constraint graphs and relative positioning
-4. **Boundary**: `x_i + w_i ≤ W_chip`, `y_i + h_i ≤ H_chip`
+Core convex constraints:
 
-#### Command-Line Arguments
+1. **Area**: `W_i + H_i >= ln(A_i)`
+2. **Aspect ratio**: `H_i - W_i <= ln(ρ)` and `W_i - H_i <= ln(ρ)`
+3. **HCG/VCG non-overlap**:
+   - `x_A + 0.5*exp(W_A) + 0.5*exp(W_B) <= x_B`
+   - `y_A + 0.5*exp(H_A) + 0.5*exp(H_B) <= y_B`
+4. **Die boundary**:
+   - `0.5*exp(W_i) - x_i <= 0`
+   - `0.5*exp(H_i) - y_i <= 0`
+   - `x_i + 0.5*exp(W_i) <= W_F`
+   - `y_i + 0.5*exp(H_i) <= H_F`
+
+Terminal pins are handled as constants in the LSE nets.
+
+### Command-Line Arguments
 
 ```bash
-python tools/legalizer/gp_area_legalizer.py <netlist.yaml> <die.yaml> [options]
+python tools/legalrect/cvx_gp_lse.py --netlist <netlist.yaml> --die <die.yaml> [options]
 ```
 
 | Argument | Type | Default | Description |
 |----------|------|---------|-------------|
-| `netlist.yaml` | positional | required | Input netlist file |
-| `die.yaml` | positional | required | Input die specification |
-| `--outfile FILE` | string | None | Output result YAML file |
-| `--max_ratio FLOAT` | float | 3.0 | Maximum aspect ratio (r_max) |
-| `--num_iter INT` | int | 15 | Number of constraint graph rebuild iterations |
-| `--verbose` | flag | False | Enable detailed solver output |
-| `--relax_factor FLOAT` | float | None | Initial relaxation factor for constraints |
-| `--plot` | flag | False | Generate layout visualization |
+| `--netlist` | string | required | Input netlist YAML |
+| `--die` | string | required | Input die YAML |
+| `--output` | string | `output_cvx_gp_lse.yaml` | Output legalized netlist |
+| `--output-image` | string | `output_cvx_gp_lse.png` | Output visualization image |
+| `--max-iter` | int | 500 | IPOPT max iterations |
+| `--max-ratio` | float | 3.0 | Maximum aspect ratio `ρ` |
+| `--alpha` | float | 2.0 | LSE smoothing parameter |
 
-**Example Usage:**
-
-```bash
-# Minimize bounding box area
-python tools/legalizer/gp_area_legalizer.py \
-  netlist.yaml die.yaml \
-  --outfile area_optimized.yaml \
-  --max_ratio 2.5 --num_iter 20 --verbose
-
-# With constraint relaxation (for difficult instances)
-python tools/legalizer/gp_area_legalizer.py \
-  netlist.yaml die.yaml \
-  --outfile result.yaml \
-  --relax_factor 1.5 --num_iter 30
-```
-
----
-
-### 2.2 `gp_wl_legalizer.py` - Wirelength Minimization via GP
-
-**Objective:** Minimize relative stretch (convex wirelength proxy)  
-**Optimization Type:** Geometric Programming (convex in log-space)  
-**Use Case:** Wirelength-driven legalization, routability optimization
-
-#### Key Features
-
-- **Convex Wirelength Proxy**: Uses relative stretch instead of HPWL
-- **Guaranteed Convergence**: Convex optimization finds global optimum
-- **Net-Aware**: Explicitly models nets and bounding boxes
-- **Shape + Position Optimization**: Co-optimizes module shapes and positions
-- **Fast and Scalable**: Handles 100+ modules efficiently
-
-#### Optimization Formulation
-
-**Variables (in log-space):**
-- `x_i, y_i, w_i, h_i`: Module variables (log-space)
-- `X_max[k], X_min[k], Y_max[k], Y_min[k]`: Net bounding box variables
-
-**Objective (Relative Stretch):**
-```
-minimize  Σ (X_max[k]/X_min[k] + Y_max[k]/Y_min[k])
-          k ∈ nets
-```
-
-This is a **convex approximation** of HPWL. Minimizing stretch encourages:
-- Small net bounding boxes
-- Balanced span in X and Y directions
-- Good routability
-
-**Constraints:**
-1. **Area constraints**: `w_i · h_i = A_i`
-2. **Aspect ratio**: `1/r_max ≤ h_i/w_i ≤ r_max`
-3. **Non-overlap** (GP form): Via constraint graphs
-4. **Boundary**: `x_i + w_i ≤ W_chip`, `y_i + h_i ≤ H_chip`
-5. **Net bounding box**: 
-   - `X_max[k] ≥ x_i` for all modules i in net k
-   - `X_min[k] ≤ x_i` for all modules i in net k
-   - Similar for Y direction
-
-#### Command-Line Arguments
+### Example Usage
 
 ```bash
-python tools/legalizer/gp_wl_legalizer.py <netlist.yaml> <die.yaml> [options]
-```
+# Convex legalization with default settings
+python tools/legalrect/cvx_gp_lse.py \
+  --netlist netlist.yaml \
+  --die die.yaml \
+  --output cvx_result.yaml \
+  --output-image cvx_result.png
 
-| Argument | Type | Default | Description |
-|----------|------|---------|-------------|
-| `netlist.yaml` | positional | required | Input netlist file |
-| `die.yaml` | positional | required | Input die specification |
-| `--outfile FILE` | string | None | Output result YAML file |
-| `--max_ratio FLOAT` | float | 3.0 | Maximum aspect ratio (r_max) |
-| `--num_iter INT` | int | 15 | Number of constraint graph rebuild iterations |
-| `--alpha FLOAT` | float | 1.0 | LSE smoothing parameter for net bounding boxes |
-| `--verbose` | flag | False | Enable detailed solver output |
-| `--plot` | flag | False | Generate layout visualization |
-
-**Example Usage:**
-
-```bash
-# Minimize wirelength (via relative stretch)
-python tools/legalizer/gp_wl_legalizer.py \
-  netlist.yaml die.yaml \
-  --outfile wl_optimized.yaml \
-  --num_iter 25 --verbose
-
-# Fine-tune LSE smoothing
-python tools/legalizer/gp_wl_legalizer.py \
-  netlist.yaml die.yaml \
-  --outfile result.yaml \
-  --alpha 2.0 --max_ratio 2.5 --num_iter 30
+# Stronger smoothing / longer solve
+python tools/legalrect/cvx_gp_lse.py \
+  --netlist netlist.yaml \
+  --die die.yaml \
+  --output cvx_result.yaml \
+  --max-iter 1000 --alpha 5.0 --max-ratio 2.5
 ```
 
 ---
@@ -402,8 +305,7 @@ python tools/legalizer/gp_wl_legalizer.py \
 |------|--------|-------------------|-----------|-------------|----------|
 | **legalizer.py** | GEKKO | Non-convex (MINLP) | HPWL + Overlap | Local optima | General-purpose, supports local mode |
 | **glb_legalizer.py** | CasADi+Ipopt | Non-convex (NLP) | LSE-HPWL + Soft overlap | Local optima | Fast global legalization, active set |
-| **gp_area_legalizer.py** | GP (log-space) | Convex | Bounding box area | Global optimum | Area minimization, shape optimization |
-| **gp_wl_legalizer.py** | GP (log-space) | Convex | Relative stretch (WL proxy) | Global optimum | Wirelength minimization, routability |
+| **cvx_gp_lse.py** | CasADi+Ipopt | Convex (mixed-space) | LSE-HPWL | Global optimum (convex model) | Convex global legalization with smooth HPWL |
 
 ### When to Use Which Tool?
 
@@ -413,34 +315,29 @@ python tools/legalizer/gp_wl_legalizer.py \
 - You have complex custom objectives
 
 **Use `glb_legalizer.py` if:**
-- You need fast global legalization (100+ modules)
+- You need fast global legalization with ipopt (100+ modules)
 - You want to use active set optimization (`--radius`)
 - You need per-iteration visualization (`--plot`)
 - You want to optimize rectilinear modules
 
-**Use `gp_area_legalizer.py` if:**
-- Your primary goal is minimizing chip area
-- You want guaranteed global optimum
-- You don't care much about wirelength initially
-
-**Use `gp_wl_legalizer.py` if:**
-- Your primary goal is minimizing wirelength
-- You want guaranteed global optimum
-- You need routability optimization
+**Use `cvx_gp_lse.py` if:**
+- You want a convex model with global-optimum guarantees
+- You want a smooth wirelength objective (LSE-HPWL)
+- You need a robust global initializer after non-convex fine-tuning for full legality
 
 ### Typical Multi-Stage Flow
 
 ```bash
-# Stage 1: GP-based initial placement (global optimum)
-python tools/legalizer/gp_wl_legalizer.py \
-  netlist.yaml die.yaml --outfile gp_result.yaml
+# Stage 1: Convex global legalization (mixed-space model)
+python tools/legalrect/cvx_gp_lse.py \
+  --netlist netlist.yaml --die die.yaml --output gp_result.yaml
 
 # Stage 2: NLP-based refinement (handle residual overlaps)
 python tools/legalizer/glb_legalizer.py \
   gp_result.yaml die.yaml --outfile refined.yaml \
-  --radius 1.0 --tau_initial 0.0001
+  --radius 1.0 --tau_initial 1000
 
-# Stage 3: Local fine-tuning (optional)
+# Stage 3: Local fine-tuning (optional) or run convex legalizer
 python tools/legalizer/legalizer.py \
   refined.yaml die.yaml --outfile final.yaml \
   --small_steps --radius 0.3 --num_iter 50
@@ -497,9 +394,9 @@ A key feature of `legalizer.py` and `glb_legalizer.py` is the use of a **dynamic
   pip install casadi
   ```
 
-- For GP legalizers (`gp_area_legalizer.py`, `gp_wl_legalizer.py`):
+- For `cvx_gp_lse.py`:
   ```bash
-  pip install casadi scipy
+  pip install casadi
   ```
 
 - For visualization (all tools):
