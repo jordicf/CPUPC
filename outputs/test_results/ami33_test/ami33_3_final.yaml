@@ -1,0 +1,1073 @@
+Modules:
+    GND:
+        fixed: true
+        rectangles:
+        -   - 0.0
+            - 1120.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P10:
+        fixed: true
+        rectangles:
+        -   - 364.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P11:
+        fixed: true
+        rectangles:
+        -   - 455.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P12:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 476.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P13:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 602.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P14:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 343.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P15:
+        fixed: true
+        rectangles:
+        -   - 0.0
+            - 994.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P16:
+        fixed: true
+        rectangles:
+        -   - 0.0
+            - 763.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P17:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 1106.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P18:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 1365.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P19:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 1421.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P2:
+        fixed: true
+        rectangles:
+        -   - 1127.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P20:
+        fixed: true
+        rectangles:
+        -   - 1645.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P21:
+        fixed: true
+        rectangles:
+        -   - 1400.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P22:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 728.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P23:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 861.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P24:
+        fixed: true
+        rectangles:
+        -   - 2058.0
+            - 168.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P25:
+        fixed: true
+        rectangles:
+        -   - 553.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P26:
+        fixed: true
+        rectangles:
+        -   - 1267.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P27:
+        fixed: true
+        rectangles:
+        -   - 336.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P28:
+        fixed: true
+        rectangles:
+        -   - 1484.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P29:
+        fixed: true
+        rectangles:
+        -   - 616.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P3:
+        fixed: true
+        rectangles:
+        -   - 1176.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P30:
+        fixed: true
+        rectangles:
+        -   - 518.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P31:
+        fixed: true
+        rectangles:
+        -   - 0.0
+            - 1225.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P32:
+        fixed: true
+        rectangles:
+        -   - 0.0
+            - 623.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P33:
+        fixed: true
+        rectangles:
+        -   - 0.0
+            - 196.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P34:
+        fixed: true
+        rectangles:
+        -   - 0.0
+            - 343.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P35:
+        fixed: true
+        rectangles:
+        -   - 0.0
+            - 483.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P36:
+        fixed: true
+        rectangles:
+        -   - 714.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P37:
+        fixed: true
+        rectangles:
+        -   - 945.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P4:
+        fixed: true
+        rectangles:
+        -   - 1022.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P5:
+        fixed: true
+        rectangles:
+        -   - 721.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P6:
+        fixed: true
+        rectangles:
+        -   - 826.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P7:
+        fixed: true
+        rectangles:
+        -   - 924.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P8:
+        fixed: true
+        rectangles:
+        -   - 168.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    P9:
+        fixed: true
+        rectangles:
+        -   - 266.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    POW:
+        fixed: true
+        rectangles:
+        -   - 1960.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    VDD:
+        fixed: true
+        rectangles:
+        -   - 1687.0
+            - 0.0
+            - 0.0
+            - 0.0
+        terminal: true
+    VSS:
+        fixed: true
+        rectangles:
+        -   - 1281.0
+            - 1463.0
+            - 0.0
+            - 0.0
+        terminal: true
+    bk1:
+        area: 44688.0
+        rectangles:
+        -   - 1791.0597440723127
+            - 65.59187763370004
+            - 341.1312098295585
+            - 131.04223465661522
+    bk10a:
+        area: 44982.0
+        rectangles:
+        -   - 686.7184945209971
+            - 389.3191826112959
+            - 367.1937067279932
+            - 122.51722202525556
+    bk10b:
+        area: 22540.0
+        rectangles:
+        -   - 633.2512527026572
+            - 284.68586368065354
+            - 259.9846479346817
+            - 86.72083962872996
+    bk10c:
+        area: 5831.0
+        rectangles:
+        -   - 797.4305191958995
+            - 285.11887552562746
+            - 68.23599607612391
+            - 85.6566293712222
+    bk11:
+        area: 20825.0
+        rectangles:
+        -   - 367.12898847387385
+            - 588.7474349750438
+            - 123.18349514415706
+            - 169.245464896128
+    bk12:
+        area: 56840.0
+        rectangles:
+        -   - 785.914163448213
+            - 172.47214026405436
+            - 412.94061881987903
+            - 137.67299525335935
+    bk13:
+        area: 69580.0
+        rectangles:
+        -   - 1190.9286980389231
+            - 115.74253751613759
+            - 300.8244940678559
+            - 231.37742461403093
+    bk14a:
+        area: 23324.0
+        rectangles:
+        -   - 622.068327433523
+            - 51.82133211074545
+            - 225.2046353316052
+            - 103.59124607787172
+    bk14b:
+        area: 34986.0
+        rectangles:
+        -   - 449.06812728662896
+            - 285.34530446966056
+            - 108.03760221800046
+            - 323.9860807346802
+    bk14c:
+        area: 19159.0
+        rectangles:
+        -   - 350.0878217621612
+            - 229.70575369116287
+            - 89.8758023654225
+            - 213.23635366978155
+    bk15a:
+        area: 31654.0
+        rectangles:
+        -   - 887.574094731304
+            - 51.81901201597374
+            - 305.71158723001685
+            - 103.56910419562332
+    bk15b:
+        area: 39984.0
+        rectangles:
+        -   - 346.7802106333024
+            - 61.520031633925974
+            - 325.2687969550703
+            - 122.97199431175896
+    bk16:
+        area: 14994.0
+        rectangles:
+        -   - 350.02967792547963
+            - 419.94830260112116
+            - 89.74915254542394
+            - 167.16572177133438
+    bk17a:
+        area: 67522.0
+        rectangles:
+        -   - 1206.88220662571
+            - 452.46524452274394
+            - 152.77595125060347
+            - 442.04150772632715
+    bk17b:
+        area: 36946.0
+        rectangles:
+        -   - 1377.5820173933917
+            - 341.32686869931365
+            - 188.3672640249897
+            - 196.29997735432596
+    bk18:
+        area: 36946.0
+        rectangles:
+        -   - 1074.9698622643893
+            - 454.89006868730985
+            - 111.0123453617016
+            - 332.92317822578764
+    bk19:
+        area: 9996.0
+        rectangles:
+        -   - 28.911124867685313
+            - 422.1008061863431
+            - 57.76933061146142
+            - 173.1703748344129
+    bk2:
+        area: 39102.0
+        rectangles:
+        -   - 1480.9745085477969
+            - 70.16150758915582
+            - 278.9304574948251
+            - 140.2286484582241
+    bk20:
+        area: 63700.0
+        rectangles:
+        -   - 944.9231902910352
+            - 455.08138383033935
+            - 149.0444298673725
+            - 427.4612257052502
+    bk21:
+        area: 44100.0
+        rectangles:
+        -   - 1377.6146287635952
+            - 556.5176626280052
+            - 188.58468678453917
+            - 233.9174665982088
+    bk3:
+        area: 41895.0
+        rectangles:
+        -   - 1542.657338359147
+            - 525.2028810889269
+            - 141.37960611368644
+            - 296.42757958511004
+    bk4:
+        area: 74480.0
+        rectangles:
+        -   - 1784.0222016491762
+            - 298.10885713583224
+            - 472.68511312614334
+            - 157.59731943165323
+    bk5a:
+        area: 18620.0
+        rectangles:
+        -   - 1540.5197674690037
+            - 179.7764011117803
+            - 236.11909209341943
+            - 78.92550707781464
+    bk5b:
+        area: 23275.0
+        rectangles:
+        -   - 1790.8298735981648
+            - 175.2128433328649
+            - 264.19915638472224
+            - 88.14186662738214
+    bk5c:
+        area: 30723.0
+        rectangles:
+        -   - 1793.1104844732674
+            - 427.53669976955626
+            - 303.59338966629764
+            - 101.22741584614833
+    bk6:
+        area: 41895.0
+        rectangles:
+        -   - 1790.6382072414262
+            - 537.2661237442809
+            - 354.48188754660976
+            - 118.20658369159766
+    bk7:
+        area: 17836.0
+        rectangles:
+        -   - 1729.304164458913
+            - 634.951262507103
+            - 231.31067735507997
+            - 77.13849113452358
+    bk8a:
+        area: 44100.0
+        rectangles:
+        -   - 244.48829197446378
+            - 420.228907018596
+            - 121.26964067272337
+            - 363.73062613695936
+    bk8b:
+        area: 47628.0
+        rectangles:
+        -   - 120.82848472517107
+            - 420.13102810457315
+            - 126.0290114248776
+            - 377.9999446700464
+    bk9a:
+        area: 21658.0
+        rectangles:
+        -   - 766.0540647777201
+            - 502.53561809654616
+            - 208.58273693555148
+            - 103.86212695363412
+    bk9b:
+        area: 14161.0
+        rectangles:
+        -   - 497.1032430868532
+            - 502.52536036674786
+            - 136.47242356081804
+            - 103.81839304985535
+    bk9c:
+        area: 42483.0
+        rectangles:
+        -   - 607.4721998029219
+            - 614.0078284827383
+            - 356.99212642922026
+            - 119.03035480149765
+    bk9d:
+        area: 9996.0
+        rectangles:
+        -   - 613.5446144533137
+            - 502.5353431012807
+            - 96.34186632510448
+            - 103.80985165880152
+Nets:
+-   - GND
+    - bk9d
+    - bk9c
+    - bk9b
+    - bk9a
+    - bk8b
+    - bk8a
+    - bk7
+    - bk6
+    - bk5c
+    - bk5b
+    - bk5a
+    - bk4
+    - bk3
+    - bk21
+    - bk20
+    - bk2
+    - bk19
+    - bk18
+    - bk17b
+    - bk17a
+    - bk16
+    - bk15b
+    - bk15a
+    - bk14c
+    - bk14b
+    - bk14a
+    - bk13
+    - bk12
+    - bk11
+    - bk10c
+    - bk10b
+    - bk10a
+    - bk1
+-   - bk9d
+    - bk9c
+    - bk9c
+    - bk9b
+    - bk9b
+    - bk9a
+    - bk9a
+    - bk7
+    - bk7
+    - bk6
+    - bk6
+    - bk5c
+    - bk5c
+    - bk5b
+    - bk5b
+    - bk5a
+    - bk4
+    - bk4
+    - bk3
+    - bk3
+    - bk21
+    - bk21
+    - bk20
+    - bk20
+    - bk2
+    - bk2
+    - bk18
+    - bk18
+    - bk17b
+    - bk17a
+    - bk17a
+    - bk16
+    - bk16
+    - bk15b
+    - bk15b
+    - bk15a
+    - bk15a
+    - bk14c
+    - bk14c
+    - bk14b
+    - bk14b
+    - bk14a
+    - bk14a
+    - bk13
+    - bk12
+    - bk12
+    - bk11
+    - bk11
+    - bk10c
+    - bk10c
+    - bk10b
+    - bk10b
+    - bk10a
+    - bk10a
+    - bk1
+    - bk1
+-   - bk9d
+    - bk9c
+    - bk9c
+    - bk9b
+    - bk9b
+    - bk9a
+    - bk9a
+    - bk7
+    - bk7
+    - bk6
+    - bk6
+    - bk5c
+    - bk5b
+    - bk5b
+    - bk5a
+    - bk5a
+    - bk4
+    - bk4
+    - bk3
+    - bk3
+    - bk21
+    - bk21
+    - bk20
+    - bk20
+    - bk2
+    - bk2
+    - bk18
+    - bk18
+    - bk17b
+    - bk17b
+    - bk17a
+    - bk17a
+    - bk14b
+    - bk14b
+    - bk13
+    - bk13
+    - bk12
+    - bk11
+    - bk11
+    - bk10c
+    - bk10c
+    - bk10b
+    - bk10b
+    - bk10a
+    - bk10a
+    - bk1
+    - bk1
+-   - bk9d
+    - bk9c
+    - bk9c
+    - bk9b
+    - bk9b
+    - bk9a
+    - bk9a
+    - bk7
+    - bk6
+    - bk6
+    - bk5c
+    - bk5b
+    - bk5b
+    - bk5a
+    - bk5a
+    - bk4
+    - bk4
+    - bk3
+    - bk3
+    - bk21
+    - bk21
+    - bk20
+    - bk2
+    - bk2
+    - bk18
+    - bk18
+    - bk17b
+    - bk17a
+    - bk17a
+    - bk15b
+    - bk15b
+    - bk15a
+    - bk14c
+    - bk14c
+    - bk14b
+    - bk14b
+    - bk14a
+    - bk14a
+    - bk13
+    - bk12
+    - bk12
+    - bk11
+    - bk11
+    - bk10c
+    - bk10b
+    - bk10b
+    - bk10a
+    - bk10a
+    - bk1
+    - bk1
+-   - bk9d
+    - bk9c
+    - bk9c
+    - bk9b
+    - bk9b
+    - bk9a
+    - bk9a
+    - bk7
+    - bk6
+    - bk5c
+    - bk5b
+    - bk5b
+    - bk5a
+    - bk4
+    - bk4
+    - bk3
+    - bk3
+    - bk21
+    - bk21
+    - bk20
+    - bk20
+    - bk2
+    - bk2
+    - bk18
+    - bk18
+    - bk17b
+    - bk17b
+    - bk17a
+    - bk17a
+    - bk14b
+    - bk14b
+    - bk13
+    - bk13
+    - bk12
+    - bk11
+    - bk11
+    - bk10c
+    - bk10c
+    - bk10b
+    - bk10b
+    - bk10a
+    - bk10a
+    - bk1
+    - bk1
+-   - bk9d
+    - bk9c
+-   - POW
+    - bk9d
+    - bk9c
+    - bk9b
+    - bk9a
+    - bk8b
+    - bk8a
+    - bk7
+    - bk6
+    - bk5c
+    - bk5b
+    - bk5a
+    - bk4
+    - bk3
+    - bk21
+    - bk20
+    - bk2
+    - bk19
+    - bk18
+    - bk17b
+    - bk17a
+    - bk16
+    - bk15b
+    - bk15a
+    - bk14c
+    - bk14b
+    - bk14a
+    - bk13
+    - bk12
+    - bk11
+    - bk10c
+    - bk10b
+    - bk10a
+    - bk1
+-   - bk9d
+    - bk10a
+-   - bk9d
+    - bk9b
+-   - P30
+    - bk9c
+-   - P27
+    - bk9c
+-   - bk9c
+    - bk9c
+    - bk9b
+    - bk20
+    - bk14b
+    - bk12
+    - bk11
+    - bk10b
+    - bk10b
+-   - bk9c
+    - bk9a
+-   - bk9c
+    - bk9b
+-   - bk9b
+    - bk10a
+-   - bk9b
+    - bk10b
+    - bk10b
+    - bk10a
+-   - bk9a
+    - bk10c
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk19
+    - bk16
+-   - bk8b
+    - bk19
+    - bk16
+-   - bk8b
+    - bk19
+-   - bk8b
+    - bk19
+-   - bk8b
+    - bk19
+-   - bk8b
+    - bk19
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8b
+    - bk8a
+-   - bk8a
+    - bk20
+    - bk16
+-   - bk8a
+    - bk16
+-   - bk8a
+    - bk16
+-   - bk8a
+    - bk16
+-   - bk8a
+    - bk16
+-   - bk8a
+    - bk16
+-   - bk8a
+    - bk16
+-   - bk8a
+    - bk16
+    - bk15b
+-   - VSS
+    - bk7
+-   - VDD
+    - bk7
+-   - P23
+    - bk7
+-   - P22
+    - bk7
+-   - bk7
+    - bk17b
+-   - P21
+    - bk6
+-   - P20
+    - bk6
+-   - P19
+    - bk6
+-   - P18
+    - bk6
+-   - P17
+    - bk6
+-   - bk6
+    - bk5c
+-   - bk6
+    - bk5c
+-   - bk6
+    - bk5c
+    - bk5b
+-   - bk6
+    - bk5c
+    - bk5b
+-   - bk6
+    - bk4
+    - bk3
+-   - bk6
+    - bk4
+-   - bk5c
+    - bk3
+-   - bk5b
+    - bk5a
+-   - bk5b
+    - bk5b
+-   - bk5b
+    - bk5a
+    - bk2
+-   - bk5b
+    - bk1
+-   - bk5b
+    - bk5a
+-   - bk5b
+    - bk1
+-   - bk5b
+    - bk1
+-   - bk5a
+    - bk2
+-   - bk5a
+    - bk4
+-   - P14
+    - bk4
+-   - P13
+    - bk4
+-   - P12
+    - bk4
+-   - bk4
+    - bk17b
+-   - bk4
+    - bk3
+-   - P16
+    - bk3
+-   - P15
+    - bk3
+-   - bk3
+    - bk15a
+-   - P3
+    - bk21
+-   - P24
+    - bk20
+-   - bk20
+    - bk18
+    - bk17b
+-   - bk20
+    - bk17a
+-   - bk20
+    - bk17a
+-   - bk20
+    - bk17a
+-   - bk20
+    - bk18
+    - bk17a
+-   - bk20
+    - bk17a
+-   - bk20
+    - bk18
+    - bk17b
+    - bk17a
+-   - P28
+    - bk2
+-   - P35
+    - bk19
+-   - P34
+    - bk19
+-   - P33
+    - bk19
+-   - P32
+    - bk19
+-   - P37
+    - bk18
+-   - P36
+    - bk18
+-   - bk18
+    - bk17a
+-   - bk18
+    - bk17a
+-   - bk17b
+    - bk16
+-   - bk16
+    - bk14c
+-   - bk16
+    - bk14b
+-   - bk16
+    - bk14b
+-   - P9
+    - bk15b
+-   - P8
+    - bk15b
+-   - P25
+    - bk15b
+-   - P11
+    - bk15b
+-   - P10
+    - bk15b
+-   - bk15b
+    - bk15a
+-   - bk15b
+    - bk14c
+-   - P7
+    - bk15a
+-   - P6
+    - bk15a
+-   - P5
+    - bk15a
+-   - bk15a
+    - bk14a
+-   - bk14c
+    - bk14b
+-   - bk14c
+    - bk14b
+-   - bk14b
+    - bk14a
+-   - P4
+    - bk13
+-   - P26
+    - bk13
+-   - P2
+    - bk13
+-   - P31
+    - bk11
+-   - bk10c
+    - bk10b
+-   - bk10c
+    - bk10a
+-   - bk10b
+    - bk10a
+-   - P29
+    - bk10a
