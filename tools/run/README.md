@@ -1,4 +1,4 @@
-# `cpupc all`
+# `cpupc run`
 
 Run the whole CPUPC flow in a single command.
 
@@ -11,4 +11,4 @@ Flows:
     cvx_legalizer   Convex legalizer
     fine_tune       Non-convex legalizer
 
-Execute `cpupc all --help` for help.
+Execute `cpupc run --help` for help.

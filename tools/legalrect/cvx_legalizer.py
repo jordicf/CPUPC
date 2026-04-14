@@ -360,41 +360,46 @@ def setup_model(modules, module_data, terminal_coords, nets,
         g.append(y[a] + 0.5 * ca.exp(H[a]) + 0.5 * ca.exp(H[b]) - y[b])
         lbg.append(-ca.inf);  ubg.append(0.0)
 
-    # ---------- objective: standard LSE-HPWL ----------
-    # α · [ log(Σ exp(x_i/α)) + log(Σ exp(−x_i/α))
-    #      + log(Σ exp(y_i/α)) + log(Σ exp(−y_i/α)) ]
+    # ---------- objective: numerically-stable LSE-HPWL (max trick) ----------
+    # log(Σ exp(z_i)) = m + log(Σ exp(z_i − m)),  m = max(z_i)
+    # HPWL ≈ α · [ lse(x_i/α) + lse(−x_i/α) + lse(y_i/α) + lse(−y_i/α) ]
+
+    def _stable_lse(vals):
+        """log-sum-exp with max-trick.  *vals* may mix ca.SX/MX and float."""
+        v = ca.vertcat(*vals)
+        m = v[0]
+        for k in range(1, v.shape[0]):
+            m = ca.fmax(m, v[k])
+        return m + ca.log(ca.sum1(ca.exp(v - m)))
+
     obj_parts = []
 
     for (wgt, mod_ids, term_pos) in nets:
         # ---- x-direction ----
-        xp, xn = [], []
+        zp, zn = [], []
         for idx in mod_ids:
-            xp.append(ca.exp(x[idx] / alpha))
-            xn.append(ca.exp(-x[idx] / alpha))
+            zp.append(x[idx] / alpha)
+            zn.append(-x[idx] / alpha)
         for (px, py) in term_pos:
-            xp.append(np.exp(px / alpha))
-            xn.append(np.exp(-px / alpha))
+            zp.append(px / alpha)
+            zn.append(-px / alpha)
 
-        if len(xp) >= 2:
-            sp = ca.sum1(ca.vertcat(*xp))
-            sn = ca.sum1(ca.vertcat(*xn))
-            hpwl_x = alpha * (ca.log(sp) + ca.log(sn))
+        if len(zp) >= 2:
+            hpwl_x = alpha * (_stable_lse(zp) + _stable_lse(zn))
         else:
             hpwl_x = 0.0
 
         # ---- y-direction ----
-        yp, yn = [], []
+        zp, zn = [], []
         for idx in mod_ids:
-            yp.append(ca.exp(y[idx] / alpha))
-            yn.append(ca.exp(-y[idx] / alpha))
+            zp.append(y[idx] / alpha)
+            zn.append(-y[idx] / alpha)
         for (px, py) in term_pos:
-            yp.append(np.exp(py / alpha))
-            yn.append(np.exp(-py / alpha))
+            zp.append(py / alpha)
+            zn.append(-py / alpha)
 
-        if len(yp) >= 2:
-            sp = ca.sum1(ca.vertcat(*yp))
-            sn = ca.sum1(ca.vertcat(*yn))
-            hpwl_y = alpha * (ca.log(sp) + ca.log(sn))
+        if len(zp) >= 2:
+            hpwl_y = alpha * (_stable_lse(zp) + _stable_lse(zn))
         else:
             hpwl_y = 0.0
 
@@ -407,6 +412,7 @@ def setup_model(modules, module_data, terminal_coords, nets,
 
     g_vec = ca.vertcat(*g) if g else ca.MX()
     nlp = {'x': opt_vars, 'f': objective, 'g': g_vec}
+
 
     print(f"  Mixed-space convex model:")
     print(f"    Variables : {opt_vars.size1()}  (n={n}, 4n={4*n})")
@@ -654,10 +660,10 @@ def main():
     p.add_argument('--die', required=True, help='Die info YAML file')
     p.add_argument('--output', default='output_cvx_legalizer.yaml')
     p.add_argument('--output-image', default='output_cvx_legalizer.png')
-    p.add_argument('--max-iter', type=int, default=300)
+    p.add_argument('--max-iter', type=int, default=500)
     p.add_argument('--max-ratio', type=float, default=3.0,
                    help='Max aspect ratio ρ')
-    p.add_argument('--alpha', type=float, default=5.0,
+    p.add_argument('--alpha', type=float, default=1.0,
                    help='LSE smoothing α ')
     args = p.parse_args()
 
