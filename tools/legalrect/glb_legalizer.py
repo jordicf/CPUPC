@@ -48,6 +48,12 @@ def parse_options(
     )
     parser.add_argument("netlist", type=str, help="Input netlist (.yaml)")
     parser.add_argument("die", type=str, help="Input die (.yaml)")
+    parser.add_argument(
+        "--min_aspect_ratio",
+        type=float,
+        default=1.0,
+        help="Min aspect ratio (w/h lower bound)",
+    )
     parser.add_argument("--max_ratio", type=float, default=3.0, help="Max aspect ratio")
     parser.add_argument("--num_iter", type=int, default=15, help="Number of iterations")
     parser.add_argument(
@@ -60,13 +66,6 @@ def parse_options(
         "--wl_mult", type=float, default=1.0, help="HPWL weight multiplier"
     )
     parser.add_argument("--verbose", action="store_true")
-    parser.add_argument(
-        "--t0", type=float, default=0.3, help="Initial annealing temperature (unused)"
-    )
-    parser.add_argument(
-        "--dt", type=float, default=0.9, help="Temperature factor (unused)"
-    )
-    parser.add_argument("--dcost", type=float, default=1e-5, help="Delta cost (unused)")
     parser.add_argument("--outfile", type=str, default=None, help="Output YAML")
     parser.add_argument("--palette_seed", type=int, default=None)
     parser.add_argument(
@@ -210,6 +209,7 @@ def compute_options(options):
         die_width,
         die_height,
         hyper,
+        options["min_aspect_ratio"],
         options["max_ratio"],
         og_names,
         terminal_map,
@@ -224,19 +224,19 @@ class ModuleVars:
     """
 
     x: list[
-        ca.MX
+        ca.SX
     ]  # x-coordinates of all rectangles [trunk, north_branches, south_branches, east_branches, west_branches]
-    y: list[ca.MX]  # y-coordinates
-    w: list[ca.MX]  # widths
-    h: list[ca.MX]  # heights
+    y: list[ca.SX]  # y-coordinates
+    w: list[ca.SX]  # widths
+    h: list[ca.SX]  # heights
     N: list[int]  # indices of North branches
     S: list[int]  # indices of South branches
     E: list[int]  # indices of East branches
     W: list[int]  # indices of West branches
     c: int  # total number of rectangles
-    area_expr: ca.MX  # sum of all rectangle areas
-    x_sum: ca.MX  # for center of mass calculation
-    y_sum: ca.MX  # for center of mass calculation
+    area_expr: ca.SX  # sum of all rectangle areas
+    x_sum: ca.SX  # for center of mass calculation
+    y_sum: ca.SX  # for center of mass calculation
 
 
 class CasadiLegalizer:
@@ -251,6 +251,7 @@ class CasadiLegalizer:
         die_width: float,
         die_height: float,
         hyper: HyperGraph,
+        min_aspect_ratio: float,
         max_ratio: float,
         og_names: list[str],
         wl_mult: float,
@@ -272,6 +273,7 @@ class CasadiLegalizer:
         self.dw = die_width
         self.dh = die_height
         self.hyper = hyper
+        self.min_aspect_ratio = min_aspect_ratio
         self.max_ratio = max_ratio
         self.og_names = og_names
         self.wl_mult = wl_mult
@@ -294,7 +296,7 @@ class CasadiLegalizer:
         self._initial_og_names = og_names
 
         # Define symbolic variables once at initialization
-        self.vars: list[ca.MX] = []
+        self.vars: list[ca.SX] = []
         self.lbx: list[float] = []
         self.ubx: list[float] = []
         self.x0: list[float] = []  # will be updated as warm-start
@@ -370,9 +372,9 @@ class CasadiLegalizer:
                 rect_count += 1
 
             # Calculate total area and center of mass
-            area_expr = ca.MX(0)
-            x_sum = ca.MX(0)
-            y_sum = ca.MX(0)
+            area_expr = ca.SX(0)
+            x_sum = ca.SX(0)
+            y_sum = ca.SX(0)
             for i in range(rect_count):
                 rect_area = w_list[i] * h_list[i]
                 area_expr = area_expr + rect_area
@@ -399,13 +401,13 @@ class CasadiLegalizer:
         self.x_sym = ca.vertcat(*self.vars)
 
         # Define parameters for dynamic updates
-        self.tau_param = ca.MX.sym("tau_param", 1)  # scalar tau
+        self.tau_param = ca.SX.sym("tau_param", 1)  # scalar tau
         # Mask for active inter-module overlap constraints
         num_inter_module_pairs = len(self.modules) * (len(self.modules) - 1) // 2
-        self.active_mask_param = ca.MX.sym(
+        self.active_mask_param = ca.SX.sym(
             "active_mask_param", num_inter_module_pairs
         )  # binary mask
-        self.step_cap_param = ca.MX.sym(
+        self.step_cap_param = ca.SX.sym(
             "step_cap_param", 1
         )  # scalar step cap for trust region
         self.params = ca.vertcat(
@@ -414,11 +416,11 @@ class CasadiLegalizer:
 
         self.nlp_initialized = False
 
-    def _define_rect_vars(self, rect: BoxType) -> tuple[ca.MX, ca.MX, ca.MX, ca.MX]:
-        x = ca.MX.sym("x", 1)
-        y = ca.MX.sym("y", 1)
-        w = ca.MX.sym("w", 1)
-        h = ca.MX.sym("h", 1)
+    def _define_rect_vars(self, rect: BoxType) -> tuple[ca.SX, ca.SX, ca.SX, ca.SX]:
+        x = ca.SX.sym("x", 1)
+        y = ca.SX.sym("y", 1)
+        w = ca.SX.sym("w", 1)
+        h = ca.SX.sym("h", 1)
         self.vars.extend([x, y, w, h])
         self.lbx.extend([0.0, 0.0, 0.1, 0.1])
         self.ubx.extend([self.dw, self.dh, self.dw, self.dh])
@@ -435,7 +437,7 @@ class CasadiLegalizer:
         rtol: float,
         verbose: bool = False,
     ) -> None:
-        g: list[ca.MX] = []
+        g: list[ca.SX] = []
         lbg: list[float] = []
         ubg: list[float] = []
 
@@ -455,23 +457,36 @@ class CasadiLegalizer:
                 lbg.append(-ca.inf)
                 ubg.append(0.0)
 
-        # 2. Minimal area requirements (skip if al ~ 0)
+        # 2. Minimal area requirements (skip if al ~ 0 or hard/fixed module)
         for i, m in enumerate(self.modules):
-            if self.al[i] > 1e-9:
+            # Skip area constraint for hard/fixed modules (dimensions are fixed)
+            has_fixed_dimensions = (
+                i in self.wl and 0 in self.wl[i] and i in self.hl and 0 in self.hl[i]
+            )
+            if self.al[i] > 1e-9 and not has_fixed_dimensions:
                 g.append(m.area_expr)
                 lbg.append(self.al[i])
                 ubg.append(ca.inf)
 
-        # 3. Aspect ratio constraint via thin(w,h) >= thin(max_ratio,1) - for ALL rectangles
-        def thin(w: ca.MX, h: ca.MX) -> ca.MX:
-            return (w * h) / (w * w + h * h)
-
-        thin_min = (self.max_ratio * 1.0) / (self.max_ratio * self.max_ratio + 1.0)
-        for m in self.modules:
-            for i in range(m.c):
-                g.append(thin(m.w[i], m.h[i]))
-                lbg.append(thin_min)
-                ubg.append(ca.inf)
+        # 3. Aspect ratio constraint (linear in w,h):
+        #    min_aspect_ratio <= w/h <= max_ratio
+        # equivalent to:
+        #    h - max_ratio * w <= 0
+        #    min_aspect_ratio * w - h <= 0
+        for i, m in enumerate(self.modules):
+            # Skip aspect ratio constraint for hard/fixed modules
+            has_fixed_dimensions = (
+                i in self.wl and 0 in self.wl[i] and i in self.hl and 0 in self.hl[i]
+            )
+            if has_fixed_dimensions:
+                continue
+            for rect_idx in range(m.c):
+                g.append(m.h[rect_idx] - self.max_ratio * m.w[rect_idx])
+                lbg.append(-ca.inf)
+                ubg.append(0.0)
+                g.append(self.min_aspect_ratio * m.w[rect_idx] - m.h[rect_idx])
+                lbg.append(-ca.inf)
+                ubg.append(0.0)
 
         # 3.5. Attachment constraints: branches must attach to trunk
         # Following legalizer.py: add_rect_north/south/east/west
@@ -590,7 +605,7 @@ class CasadiLegalizer:
 
         # 4. Inter-module non-overlap: check ALL rectangle pairs between different modules
         # Following legalizer.py: check all combinations of rectangles
-        def smax(a: ca.MX, b: ca.MX, tau: ca.MX) -> ca.MX:
+        def smax(a: ca.SX, b: ca.SX, tau: ca.SX) -> ca.SX:
             return 0.5 * (a + b + ca.sqrt((a - b) * (a - b) + 4 * tau * tau))
 
         pair_idx_counter = 0
@@ -653,33 +668,74 @@ class CasadiLegalizer:
                 lbg.append(-ca.inf)
                 ubg.append(0.0)
 
-        # 0. Fixed module constraints
-        # For fixed modules, add equality constraints for position
+        # 0. Fixed and Hard module constraints
+        # Fixed modules: position AND dimensions are fixed
+        # Hard modules: only dimensions are fixed (position can be optimized)
+        n_fixed = 0
+        n_hard = 0
+        
         for i, m in enumerate(self.modules):
-            # Check if this module is fixed
+            module_name = self.og_names[i] if i < len(self.og_names) else f"Module_{i}"
+            
+            # Check if this module has fixed position (fixed module)
             has_fixed_position = (
                 i in self.xl and 0 in self.xl[i] and i in self.yl and 0 in self.yl[i]
             )
+            
+            # Check if this module has fixed dimensions (hard or fixed module)
+            has_fixed_dimensions = (
+                i in self.wl and 0 in self.wl[i] and i in self.hl and 0 in self.hl[i]
+            )
 
             if has_fixed_position:
-                # Fix trunk position
+                # Fix trunk position for fixed modules
                 g.append(m.x[0] - self.xl[i][0])
                 lbg.append(0.0)
                 ubg.append(0.0)
                 g.append(m.y[0] - self.yl[i][0])
                 lbg.append(0.0)
                 ubg.append(0.0)
+                n_fixed += 1
 
                 if verbose:
-                    module_name = (
-                        self.og_names[i] if i < len(self.og_names) else f"Module_{i}"
-                    )
                     print(
-                        f"[Section 0] Fixed module {module_name} at ({self.xl[i][0]:.2f}, {self.yl[i][0]:.2f})"
+                        f"[Section 0] Fixed module {module_name} position at ({self.xl[i][0]:.2f}, {self.yl[i][0]:.2f})"
                     )
+            
+            if has_fixed_dimensions:
+                # Fix dimensions for hard/fixed modules
+                # Trunk (rectangle 0)
+                g.append(m.w[0] - self.wl[i][0])
+                lbg.append(0.0)
+                ubg.append(0.0)
+                g.append(m.h[0] - self.hl[i][0])
+                lbg.append(0.0)
+                ubg.append(0.0)
+                
+                # Branches (if any)
+                for rect_idx in range(1, m.c):
+                    if rect_idx in self.wl.get(i, {}) and rect_idx in self.hl.get(i, {}):
+                        g.append(m.w[rect_idx] - self.wl[i][rect_idx])
+                        lbg.append(0.0)
+                        ubg.append(0.0)
+                        g.append(m.h[rect_idx] - self.hl[i][rect_idx])
+                        lbg.append(0.0)
+                        ubg.append(0.0)
+                
+                if not has_fixed_position:
+                    n_hard += 1
+                
+                if verbose:
+                    print(
+                        f"[Section 0] {'Fixed' if has_fixed_position else 'Hard'} module {module_name} "
+                        f"dimensions fixed at ({self.wl[i][0]:.2f} x {self.hl[i][0]:.2f})"
+                    )
+        
+        if verbose and (n_fixed > 0 or n_hard > 0):
+            print(f"[Section 0] Total: {n_fixed} fixed modules, {n_hard} hard modules")
 
         # Objective: LSE(HPWL) with terminals as constants
-        def stable_logsumexp(vals: list[ca.MX], a: float) -> ca.MX:
+        def stable_logsumexp(vals: list[ca.SX], a: float) -> ca.SX:
             ax = [a * v for v in vals]
             m = ax[0]
             for v in ax[1:]:
@@ -690,9 +746,9 @@ class CasadiLegalizer:
             return m + ca.log(s)
 
         alpha = 1.0
-        obj_terms: list[ca.MX] = []
+        obj_terms: list[ca.SX] = []
 
-        def module_center(m: ModuleVars) -> tuple[ca.MX, ca.MX]:
+        def module_center(m: ModuleVars) -> tuple[ca.SX, ca.SX]:
             # Center of mass: weighted average of all rectangles
             area_safe = m.area_expr + 1e-10
             cx = m.x_sum / area_safe
@@ -700,8 +756,8 @@ class CasadiLegalizer:
             return cx, cy
 
         for weight, vertices, terminals in self.hyper:
-            pts_x: list[ca.MX] = []
-            pts_y: list[ca.MX] = []
+            pts_x: list[ca.SX] = []
+            pts_y: list[ca.SX] = []
             for i in vertices:
                 cx, cy = module_center(self.modules[i])
                 pts_x.append(cx)
@@ -709,8 +765,8 @@ class CasadiLegalizer:
             for tname in terminals:
                 if tname in self.terminal_map:
                     tx, ty = self.terminal_map[tname]
-                    pts_x.append(ca.MX(tx))
-                    pts_y.append(ca.MX(ty))
+                    pts_x.append(ca.DM(tx))
+                    pts_y.append(ca.DM(ty))
             if len(pts_x) < 2:
                 continue
             lse_x = (
@@ -726,9 +782,9 @@ class CasadiLegalizer:
         if obj_terms:
             f = ca.sum1(ca.vertcat(*obj_terms))
         else:
-            f = ca.MX(0)
+            f = ca.SX(0)
 
-        self.g_sym = ca.vertcat(*g) if g else ca.MX()
+        self.g_sym = ca.vertcat(*g) if g else ca.SX()
         self.f_sym = f
 
         self._lbg_list = lbg
@@ -751,6 +807,7 @@ class CasadiLegalizer:
                 "ipopt.linear_solver": "mumps",
                 "ipopt.max_iter": 1000,
                 "ipopt.hessian_approximation": "limited-memory",
+                "expand": False,  # Disable CasADi expression expansion for SX variables
             },
         )
 
@@ -821,7 +878,7 @@ def visualize_iteration(
 ) -> None:
     """Visualize current layout with HPWL and overlap information"""
     if not MATPLOTLIB_AVAILABLE:
-        print("⚠️  matplotlib not available, skipping visualization")
+        print(" matplotlib not available, skipping visualization")
         return
 
     fig, ax = plt.subplots(figsize=(12, 12))
@@ -907,7 +964,7 @@ def visualize_iteration(
 
     # Title with statistics
     ax.set_title(
-        f"Iteration {iteration}\n"
+        # f"Iteration {iteration}\n"
         f"HPWL: {hpwl:.2f}, Overlap: {overlap:.4f}, τ: {tau:.2e}\n"
         f"Die: {die_width:.1f} × {die_height:.1f}, Modules: {len(ml)}, Terminals: {len(terminal_map)}",
         fontsize=12,
@@ -927,7 +984,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
     # Check if plotting is enabled
     plot_enabled = options.get("plot", False)
     if plot_enabled and not MATPLOTLIB_AVAILABLE:
-        print("⚠️  Warning: --plot enabled but matplotlib not available")
+        print(" Warning: --plot enabled but matplotlib not available")
         print("    Install matplotlib: pip install matplotlib")
         plot_enabled = False
 
@@ -935,7 +992,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
     if plot_enabled:
         plot_dir = options.get("plot_dir", "plots")
         os.makedirs(plot_dir, exist_ok=True)
-        print(f"📁 Plot directory: {plot_dir}")
+        print(f" Plot directory: {plot_dir}")
 
     (
         ml,
@@ -947,15 +1004,40 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
         die_width,
         die_height,
         hyper,
+        min_aspect_ratio,
         max_ratio,
         og_names,
         terminal_map,
     ) = compute_options(options)
 
+    # Count module types
+    n_fixed = 0
+    n_hard = 0
+    n_soft = 0
+    for i in range(len(ml)):
+        has_fixed_pos = i in xl and 0 in xl[i] and i in yl and 0 in yl[i]
+        has_fixed_dim = i in wl and 0 in wl[i] and i in hl and 0 in hl[i]
+        if has_fixed_pos:
+            n_fixed += 1
+        elif has_fixed_dim:
+            n_hard += 1
+        else:
+            n_soft += 1
+    
+    # Count nets with custom weights
+    n_weighted = sum(1 for (w, _, _) in hyper if abs(w - 1.0) > 1e-9)
+    
+    print(f"Module types: {n_soft} soft, {n_hard} hard, {n_fixed} fixed")
+    print(f"Terminals: {len(terminal_map)}")
+    print(f"Nets: {len(hyper)} ({n_weighted} with custom weights)")
+
     last_x = None
     die_area = die_width * die_height
-    overlap_threshold = die_area * 0.0085
-    # overlap_threshold = 1e-5
+
+    # Calculate total module area for overlap threshold
+    total_module_area = sum(al)  # al contains all module areas
+    overlap_threshold = 1e-5 # 1% of total module area
+    #overlap_threshold = 1e-5
 
     def compute_total_overlap(ml: list[InputModule]) -> float:
         """Compute total overlap area between all module pairs"""
@@ -1031,7 +1113,8 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
                 pair_idx_counter += 1
 
         # Compute trust-region step size: proportional to die dimension, gradually decreasing
-        step_cap = 0.1 * max_dim * (1.0 - 0.6 * (i / max(1, options["num_iter"] - 1)))
+        step_cap = 1.0* max_dim * (1.0 - 0.6 * (i / max(1, options["num_iter"] - 1)))
+        #step_cap = 0.5* max_dim 
 
         # Create CasadiLegalizer instance (rebuilt each iteration with updated ml)
         model = CasadiLegalizer(
@@ -1044,6 +1127,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
             die_width,
             die_height,
             hyper,
+            min_aspect_ratio,
             max_ratio,
             og_names,
             wl_mult=options["wl_mult"],
@@ -1144,10 +1228,10 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
                 tau=current_tau,
             )
 
-        # Iteration stop criterion: stop when overlap area < die_area * 0.0085
+        # Iteration stop criterion
         if current_overlap < overlap_threshold:
             print(
-                f"Early termination: overlap area {current_overlap:.6f} < threshold {overlap_threshold:.6f} (die_area * 0.0085)"
+                f"Early termination: overlap area {current_overlap:.6f} < threshold {overlap_threshold:.6f} (total_module_area * 0.01)"
             )
             break
 

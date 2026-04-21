@@ -169,7 +169,7 @@ def parse_yaml_aspect_ratio(
     ), f"Incorrect format for aspect ratio of module {name}"
 
     assert (
-        0 <= aspect_ratio[0] <= 1 <= aspect_ratio[1]
+        0 <= aspect_ratio[0] <= aspect_ratio[1]
     ), f"Incorrect value for aspect ratio of module {name}"
     return AspectRatio(float(aspect_ratio[0]), float(aspect_ratio[1]))
 

@@ -251,7 +251,7 @@ def build_constraint_graphs(module_data, modules):
 
 def setup_model(modules, module_data, terminal_coords, nets,
                 die_width, die_height, h_edges, v_edges,
-                alpha, max_ratio=3.0):
+                alpha, min_aspect_ratio=1.0, max_ratio=3.0):
     r"""
     Build the convex NLP in mixed linear / log space.
 
@@ -264,7 +264,8 @@ def setup_model(modules, module_data, terminal_coords, nets,
     n = len(modules)
     W_F = float(die_width)
     H_F = float(die_height)
-    log_rho = np.log(max_ratio)
+    log_ar_min = np.log(min_aspect_ratio)
+    log_ar_max = np.log(max_ratio)
 
     # ---------- symbolic variables ----------
     x = ca.MX.sym('x', n)
@@ -291,7 +292,8 @@ def setup_model(modules, module_data, terminal_coords, nets,
         d = module_data[modules[i]]
         area = d['area']
         if area > 0:
-            w_min = max(np.sqrt(area / max_ratio), 0.01)
+            # w/h in [r_min, r_max] and w*h = area  =>  w in [sqrt(A*r_min), sqrt(A*r_max)]
+            w_min = max(np.sqrt(area * min_aspect_ratio), 0.01)
             w_max = min(np.sqrt(area * max_ratio), W_F)
         else:
             w_min, w_max = 0.01, W_F
@@ -302,8 +304,9 @@ def setup_model(modules, module_data, terminal_coords, nets,
         d = module_data[modules[i]]
         area = d['area']
         if area > 0:
+            # h = area / w  => h in [sqrt(A/r_max), sqrt(A/r_min)]
             h_min = max(np.sqrt(area / max_ratio), 0.01)
-            h_max = min(np.sqrt(area * max_ratio), H_F)
+            h_max = min(np.sqrt(area / min_aspect_ratio), H_F)
         else:
             h_min, h_max = 0.01, H_F
         lbx.append(np.log(h_min));  ubx.append(np.log(h_max))
@@ -322,12 +325,11 @@ def setup_model(modules, module_data, terminal_coords, nets,
             n_area += 1
 
     # 2. Aspect ratio  (linear, convex)
-    #    H_i − W_i ≤ ln(ρ)   and   W_i − H_i ≤ ln(ρ)
+    #    ln(r_min) <= W_i - H_i <= ln(r_max)
+    #    equivalent to r_min <= w_i/h_i <= r_max
     for i in range(n):
-        g.append(H[i] - W[i])
-        lbg.append(-ca.inf);  ubg.append(log_rho)
         g.append(W[i] - H[i])
-        lbg.append(-ca.inf);  ubg.append(log_rho)
+        lbg.append(log_ar_min);  ubg.append(log_ar_max)
 
     # 3. Boundary  (convex: exp(·) is convex)
     #    Left   :  ½ exp(W_i) − x_i  ≤  0
@@ -577,7 +579,7 @@ def visualize(modules, module_data, die_w, die_h,
 
 
 def optimize_floorplan(netlist_file, die_file, output_file, output_image,
-                       max_iter=500, max_ratio=3.0, alpha=None):
+                       max_iter=500, min_aspect_ratio=1.0, max_ratio=3.0, alpha=None):
 
     print('=' * 70)
     print('Mixed-Space Convex Floorplan Optimisation')
@@ -602,6 +604,14 @@ def optimize_floorplan(netlist_file, die_file, output_file, output_image,
     if alpha is None:
         alpha = max(die_w, die_h) / 20.0
     print(f"  α (LSE smoothing): {alpha:.4f}")
+    print(f"  aspect ratio range (w/h): [{min_aspect_ratio:.4f}, {max_ratio:.4f}]")
+
+    if min_aspect_ratio <= 0:
+        raise ValueError("min_aspect_ratio must be > 0")
+    if max_ratio <= 0:
+        raise ValueError("max_ratio must be > 0")
+    if min_aspect_ratio > max_ratio:
+        raise ValueError("min_aspect_ratio must be <= max_ratio")
 
     for name in modules:
         d = module_data[name]
@@ -621,7 +631,7 @@ def optimize_floorplan(netlist_file, die_file, output_file, output_image,
     nlp, pdata = setup_model(
         modules, module_data, terminal_coords, nets,
         die_w, die_h, h_edges, v_edges,
-        alpha=alpha, max_ratio=max_ratio)
+        alpha=alpha, min_aspect_ratio=min_aspect_ratio, max_ratio=max_ratio)
     print()
 
     print('Solving ...')
@@ -663,13 +673,17 @@ def main():
     p.add_argument('--max-iter', type=int, default=500)
     p.add_argument('--max-ratio', type=float, default=3.0,
                    help='Max aspect ratio ρ')
+    p.add_argument('--min-aspect-ratio', type=float, default=0.3,
+                   help='Min aspect ratio for w/h (default 0.3)')
     p.add_argument('--alpha', type=float, default=1.0,
                    help='LSE smoothing α ')
     args = p.parse_args()
 
     optimize_floorplan(
         args.netlist, args.die, args.output, args.output_image,
-        max_iter=args.max_iter, max_ratio=args.max_ratio,
+        max_iter=args.max_iter,
+        min_aspect_ratio=args.min_aspect_ratio,
+        max_ratio=args.max_ratio,
         alpha=args.alpha)
 
 
