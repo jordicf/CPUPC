@@ -57,10 +57,12 @@ def _add_cvx_opts(parser: argparse.ArgumentParser) -> None:
     g = parser.add_argument_group("cvx_legalizer flow options")
     g.add_argument("--max-iter", type=int, default=500,
                    help="Max IPOPT iterations (default: 500)")
-    g.add_argument("--max-ratio", type=float, default=3.0,
-                   help="Max aspect ratio (default: 3.0)")
-    g.add_argument("--alpha", type=float, default=15.0,
-                   help="LSE smoothing parameter (default: 15.0)")
+    g.add_argument("--min-aspect-ratio", type=float, default=None,
+                   help="Min aspect ratio fallback for w/h (default: None)")
+    g.add_argument("--max-ratio", type=float, default=None,
+                   help="Max aspect ratio fallback (default: None)")
+    g.add_argument("--alpha", type=float, default=1.0,
+                   help="LSE smoothing parameter (default: 1.0)")
 
 
 def _add_fine_tune_opts(parser: argparse.ArgumentParser) -> None:
@@ -146,6 +148,7 @@ def _run_cvx_legalizer(opts: dict[str, Any]) -> None:
     optimize_floorplan(
         opts["netlist"], opts["die"], opts["output"], img,
         max_iter=opts["max_iter"],
+        min_aspect_ratio=opts.get("min_aspect_ratio"),
         max_ratio=opts["max_ratio"],
         alpha=opts.get("alpha"),
     )
