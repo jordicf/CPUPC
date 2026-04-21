@@ -31,12 +31,63 @@ def load_die_info(path):
 
 
 
-def extract_modules_and_terminals(netlist_data):
+def _parse_module_ar_bounds(
+    info: dict,
+    module_name: str,
+    default_min_ar: float | None,
+    default_max_ar: float | None,
+) -> tuple[float, float]:
+    """
+    Parse per-module aspect_ratio from netlist info.
+    Fallback to CLI defaults when absent or malformed.
+    """
+    ar = info.get("aspect_ratio", None)
+    if ar is None:
+        if default_min_ar is None or default_max_ar is None:
+            raise ValueError(
+                f"Module {module_name} has no aspect_ratio in netlist, and CLI "
+                "fallback (--min-aspect-ratio/--max-ratio) is not fully specified."
+            )
+        return float(default_min_ar), float(default_max_ar)
+
+    if isinstance(ar, (int, float)):
+        v = float(ar)
+        if v <= 0:
+            if default_min_ar is None or default_max_ar is None:
+                raise ValueError(
+                    f"Module {module_name} has invalid scalar aspect_ratio={ar}, and CLI "
+                    "fallback (--min-aspect-ratio/--max-ratio) is not fully specified."
+                )
+            return float(default_min_ar), float(default_max_ar)
+        inv = 1.0 / v
+        return float(min(v, inv)), float(max(v, inv))
+
+    if isinstance(ar, (list, tuple)) and len(ar) == 2:
+        a0, a1 = ar[0], ar[1]
+        if isinstance(a0, (int, float)) and isinstance(a1, (int, float)):
+            ar_min = float(a0)
+            ar_max = float(a1)
+            if ar_min > 0 and ar_max > 0 and ar_min <= ar_max:
+                return ar_min, ar_max
+
+    if default_min_ar is None or default_max_ar is None:
+        raise ValueError(
+            f"Module {module_name} has invalid aspect_ratio={ar}, and CLI "
+            "fallback (--min-aspect-ratio/--max-ratio) is not fully specified."
+        )
+    return float(default_min_ar), float(default_max_ar)
+
+
+def extract_modules_and_terminals(
+    netlist_data,
+    default_min_ar: float | None = None,
+    default_max_ar: float | None = None,
+):
     """
     Returns
     -------
     modules : list[str]
-    module_data : dict  – {name: {area, x, y, w, h}}
+    module_data : dict  – {name: {area, x, y, w, h, ar_min, ar_max}}
     terminal_coords : dict  – {name: (x, y)}
     """
     modules = []
@@ -72,7 +123,13 @@ def extract_modules_and_terminals(netlist_data):
         if area <= 0 and w > 0 and h > 0:
             area = w * h
 
-        module_data[name] = {'area': area, 'x': x, 'y': y, 'w': w, 'h': h}
+        ar_min, ar_max = _parse_module_ar_bounds(
+            info, name, default_min_ar, default_max_ar
+        )
+        module_data[name] = {
+            'area': area, 'x': x, 'y': y, 'w': w, 'h': h,
+            'ar_min': ar_min, 'ar_max': ar_max,
+        }
         modules.append(name)
 
     return modules, module_data, terminal_coords
@@ -251,7 +308,7 @@ def build_constraint_graphs(module_data, modules):
 
 def setup_model(modules, module_data, terminal_coords, nets,
                 die_width, die_height, h_edges, v_edges,
-                alpha, min_aspect_ratio=1.0, max_ratio=3.0):
+                alpha):
     r"""
     Build the convex NLP in mixed linear / log space.
 
@@ -264,9 +321,6 @@ def setup_model(modules, module_data, terminal_coords, nets,
     n = len(modules)
     W_F = float(die_width)
     H_F = float(die_height)
-    log_ar_min = np.log(min_aspect_ratio)
-    log_ar_max = np.log(max_ratio)
-
     # ---------- symbolic variables ----------
     x = ca.MX.sym('x', n)
     y = ca.MX.sym('y', n)
@@ -291,10 +345,12 @@ def setup_model(modules, module_data, terminal_coords, nets,
     for i in range(n):
         d = module_data[modules[i]]
         area = d['area']
+        ar_min = max(float(d['ar_min']), 1e-8)
+        ar_max = max(float(d['ar_max']), ar_min)
         if area > 0:
             # w/h in [r_min, r_max] and w*h = area  =>  w in [sqrt(A*r_min), sqrt(A*r_max)]
-            w_min = max(np.sqrt(area * min_aspect_ratio), 0.01)
-            w_max = min(np.sqrt(area * max_ratio), W_F)
+            w_min = max(np.sqrt(area * ar_min), 0.01)
+            w_max = min(np.sqrt(area * ar_max), W_F)
         else:
             w_min, w_max = 0.01, W_F
         lbx.append(np.log(w_min));  ubx.append(np.log(w_max))
@@ -303,10 +359,12 @@ def setup_model(modules, module_data, terminal_coords, nets,
     for i in range(n):
         d = module_data[modules[i]]
         area = d['area']
+        ar_min = max(float(d['ar_min']), 1e-8)
+        ar_max = max(float(d['ar_max']), ar_min)
         if area > 0:
             # h = area / w  => h in [sqrt(A/r_max), sqrt(A/r_min)]
-            h_min = max(np.sqrt(area / max_ratio), 0.01)
-            h_max = min(np.sqrt(area / min_aspect_ratio), H_F)
+            h_min = max(np.sqrt(area / ar_max), 0.01)
+            h_max = min(np.sqrt(area / ar_min), H_F)
         else:
             h_min, h_max = 0.01, H_F
         lbx.append(np.log(h_min));  ubx.append(np.log(h_max))
@@ -328,6 +386,11 @@ def setup_model(modules, module_data, terminal_coords, nets,
     #    ln(r_min) <= W_i - H_i <= ln(r_max)
     #    equivalent to r_min <= w_i/h_i <= r_max
     for i in range(n):
+        d = module_data[modules[i]]
+        ar_min = max(float(d['ar_min']), 1e-8)
+        ar_max = max(float(d['ar_max']), ar_min)
+        log_ar_min = np.log(ar_min)
+        log_ar_max = np.log(ar_max)
         g.append(W[i] - H[i])
         lbg.append(log_ar_min);  ubg.append(log_ar_max)
 
@@ -579,7 +642,7 @@ def visualize(modules, module_data, die_w, die_h,
 
 
 def optimize_floorplan(netlist_file, die_file, output_file, output_image,
-                       max_iter=500, min_aspect_ratio=1.0, max_ratio=3.0, alpha=None):
+                       max_iter=500, min_aspect_ratio=None, max_ratio=None, alpha=None):
 
     print('=' * 70)
     print('Mixed-Space Convex Floorplan Optimisation')
@@ -591,8 +654,11 @@ def optimize_floorplan(netlist_file, die_file, output_file, output_image,
     die_w = die_info.get('width', 800.0)
     die_h = die_info.get('height', 800.0)
 
-    modules, module_data, terminal_coords = \
-        extract_modules_and_terminals(netlist_data)
+    modules, module_data, terminal_coords = extract_modules_and_terminals(
+        netlist_data,
+        default_min_ar=min_aspect_ratio,
+        default_max_ar=max_ratio,
+    )
     n = len(modules)
     print(f"  Modules:   {n}")
     print(f"  Terminals: {len(terminal_coords)}")
@@ -604,14 +670,18 @@ def optimize_floorplan(netlist_file, die_file, output_file, output_image,
     if alpha is None:
         alpha = max(die_w, die_h) / 20.0
     print(f"  α (LSE smoothing): {alpha:.4f}")
-    print(f"  aspect ratio range (w/h): [{min_aspect_ratio:.4f}, {max_ratio:.4f}]")
-
-    if min_aspect_ratio <= 0:
-        raise ValueError("min_aspect_ratio must be > 0")
-    if max_ratio <= 0:
-        raise ValueError("max_ratio must be > 0")
-    if min_aspect_ratio > max_ratio:
-        raise ValueError("min_aspect_ratio must be <= max_ratio")
+    if min_aspect_ratio is not None or max_ratio is not None:
+        if min_aspect_ratio is None or max_ratio is None:
+            raise ValueError("Provide both --min-aspect-ratio and --max-ratio, or neither.")
+        if min_aspect_ratio <= 0:
+            raise ValueError("min_aspect_ratio must be > 0")
+        if max_ratio <= 0:
+            raise ValueError("max_ratio must be > 0")
+        if min_aspect_ratio > max_ratio:
+            raise ValueError("min_aspect_ratio must be <= max_ratio")
+        print(f"  CLI fallback aspect ratio range (w/h): [{min_aspect_ratio:.4f}, {max_ratio:.4f}]")
+    else:
+        print("  CLI fallback aspect ratio range: not set (must come from netlist)")
 
     for name in modules:
         d = module_data[name]
@@ -631,7 +701,7 @@ def optimize_floorplan(netlist_file, die_file, output_file, output_image,
     nlp, pdata = setup_model(
         modules, module_data, terminal_coords, nets,
         die_w, die_h, h_edges, v_edges,
-        alpha=alpha, min_aspect_ratio=min_aspect_ratio, max_ratio=max_ratio)
+        alpha=alpha)
     print()
 
     print('Solving ...')
@@ -671,10 +741,10 @@ def main():
     p.add_argument('--output', default='output_cvx_legalizer.yaml')
     p.add_argument('--output-image', default='output_cvx_legalizer.png')
     p.add_argument('--max-iter', type=int, default=500)
-    p.add_argument('--max-ratio', type=float, default=3.0,
-                   help='Max aspect ratio ρ')
-    p.add_argument('--min-aspect-ratio', type=float, default=0.3,
-                   help='Min aspect ratio for w/h (default 0.3)')
+    p.add_argument('--max-ratio', type=float, default=None,
+                   help='Fallback max aspect ratio ρ (used only when module omits aspect_ratio)')
+    p.add_argument('--min-aspect-ratio', type=float, default=None,
+                   help='Fallback min aspect ratio for w/h (used only when module omits aspect_ratio)')
     p.add_argument('--alpha', type=float, default=1.0,
                    help='LSE smoothing α ')
     args = p.parse_args()
