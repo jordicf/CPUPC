@@ -1,4 +1,4 @@
-# (c) Ylham Imam, 2025 — CasADi port
+# (c) Ylham Imam, 2026 — refactor
 # For the CPUPC Project.
 # Licensed under the MIT License (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
@@ -104,6 +104,8 @@ def netlist_to_utils(netlist: Netlist):
     mod_map: dict[str, int] = {}
     og_names: list[str] = []
     terminal_map: dict[str, tuple[float, float]] = {}
+    min_ar_list: list[float] = []
+    max_ar_list: list[float] = []
 
     # Terminals (io_pin): treat coordinates as constants
     # Following legalizer.py: terminals are is_iopin, not just is_fixed
@@ -128,6 +130,12 @@ def netlist_to_utils(netlist: Netlist):
         # Normal modules (including fixed and hard)
         mod_map[module.name] = len(ml)
         og_names.append(module.name)
+        if module.aspect_ratio is not None:
+            min_ar_list.append(float(module.aspect_ratio.min_wh))
+            max_ar_list.append(float(module.aspect_ratio.max_wh))
+        else:
+            min_ar_list.append(float("nan"))
+            max_ar_list.append(float("nan"))
         b: InputModule = ((0, 0, 0, 0), [], [], [], [])
         trunk_defined = False
         for rect in module.rectangles:
@@ -190,7 +198,7 @@ def netlist_to_utils(netlist: Netlist):
         if modules:
             hyper.append((weight, modules, terminals))
 
-    return ml, al, xl, yl, wl, hl, hyper, og_names, terminal_map
+    return ml, al, xl, yl, wl, hl, hyper, og_names, terminal_map, min_ar_list, max_ar_list
 
 
 def compute_options(options):
@@ -198,7 +206,7 @@ def compute_options(options):
     die_width: float = die.width
     die_height: float = die.height
     netlist = Netlist(options["netlist"])
-    ml, al, xl, yl, wl, hl, hyper, og_names, terminal_map = netlist_to_utils(netlist)
+    ml, al, xl, yl, wl, hl, hyper, og_names, terminal_map, min_ar_list, max_ar_list = netlist_to_utils(netlist)
     return (
         ml,
         al,
@@ -209,6 +217,8 @@ def compute_options(options):
         die_width,
         die_height,
         hyper,
+        min_ar_list,
+        max_ar_list,
         options["min_aspect_ratio"],
         options["max_ratio"],
         og_names,
@@ -251,6 +261,8 @@ class CasadiLegalizer:
         die_width: float,
         die_height: float,
         hyper: HyperGraph,
+        min_ar_list: list[float],
+        max_ar_list: list[float],
         min_aspect_ratio: float,
         max_ratio: float,
         og_names: list[str],
@@ -263,6 +275,7 @@ class CasadiLegalizer:
         rtol_final: float,
         tol_decay: float,
         terminal_map: dict[str, tuple[float, float]],
+        verbose: bool = False,
     ) -> None:
         self.ml = ml
         self.al = al
@@ -273,11 +286,23 @@ class CasadiLegalizer:
         self.dw = die_width
         self.dh = die_height
         self.hyper = hyper
+        self.min_ar_list = min_ar_list
+        self.max_ar_list = max_ar_list
         self.min_aspect_ratio = min_aspect_ratio
         self.max_ratio = max_ratio
         self.og_names = og_names
         self.wl_mult = wl_mult
-        self.tau_initial = tau_initial if tau_initial is not None else sum(al) / 1.0
+        if tau_initial is not None:
+            self.tau_initial = tau_initial
+        else:
+            # Default tau_initial: average module width * average module height
+            # (computed from trunk rectangles in input ml).
+            if len(ml) > 0:
+                avg_w = sum(float(m[0][2]) for m in ml) / float(len(ml))
+                avg_h = sum(float(m[0][3]) for m in ml) / float(len(ml))
+                self.tau_initial = max(1e-9, avg_w * avg_h)
+            else:
+                self.tau_initial = 1.0
         self.tau_decay = tau_decay
         self.otol_initial = otol_initial
         self.otol_final = otol_final
@@ -285,15 +310,7 @@ class CasadiLegalizer:
         self.rtol_final = rtol_final
         self.tol_decay = tol_decay
         self.terminal_map = terminal_map  # terminals as constants
-
-        # Store initial data for rebuilding problem in each iteration
-        self._initial_ml = ml
-        self._initial_al = al
-        self._initial_xl = xl
-        self._initial_yl = yl
-        self._initial_wl = wl
-        self._initial_hl = hl
-        self._initial_og_names = og_names
+        self._solver_verbose = verbose
 
         # Define symbolic variables once at initialization
         self.vars: list[ca.SX] = []
@@ -301,16 +318,36 @@ class CasadiLegalizer:
         self.ubx: list[float] = []
         self.x0: list[float] = []  # will be updated as warm-start
         self.modules: list[ModuleVars] = []
+        self.module_has_variables: list[bool] = []
+        # Per module / rect variable index layout for robust unpacking.
+        # Each entry: {"x": idx|None, "y": idx|None, "w": idx|None, "h": idx|None}
+        self.rect_var_layouts: list[list[dict[str, Optional[int]]]] = []
+        self.module_kinds: list[str] = []  # "fixed" | "hard" | "soft"
 
-        # Initialize module variables and bounds for ALL rectangles
-        # Following legalizer.py architecture: each module has lists of variables for all rectangles
+        # Initialize module expressions / bounds for ALL rectangles
+        # fixed: constants only; hard: x,y vars + constant w,h; soft: x,y,w,h vars.
         for idx, trunk_data in enumerate(self.ml):
             (x0, y0, w0, h0), Nb, Sb, Eb, Wb = trunk_data
+            has_fixed_position = (
+                idx in self.xl and 0 in self.xl[idx] and idx in self.yl and 0 in self.yl[idx]
+            )
+            has_fixed_dimensions = (
+                idx in self.wl and 0 in self.wl[idx] and idx in self.hl and 0 in self.hl[idx]
+            )
+            if has_fixed_position:
+                module_kind = "fixed"
+            elif has_fixed_dimensions:
+                module_kind = "hard"
+            else:
+                module_kind = "soft"
+            self.module_kinds.append(module_kind)
 
             # Trunk (rectangle 0)
-            trunk_x, trunk_y, trunk_w, trunk_h = self._define_rect_vars(
-                (x0, y0, w0, h0)
+            rect_layouts: list[dict[str, Optional[int]]] = []
+            trunk_x, trunk_y, trunk_w, trunk_h, trunk_layout = self._define_rect_by_kind(
+                module_kind, idx, 0, (x0, y0, w0, h0)
             )
+            rect_layouts.append(trunk_layout)
             x_list = [trunk_x]
             y_list = [trunk_y]
             w_list = [trunk_w]
@@ -325,49 +362,53 @@ class CasadiLegalizer:
 
             # Add North branches
             for bx, by, bw, bh in Nb:
-                bx_var, by_var, bw_var, bh_var = self._define_rect_vars(
-                    (bx, by, bw, bh)
+                bx_var, by_var, bw_var, bh_var, bl = self._define_rect_by_kind(
+                    module_kind, idx, rect_count, (bx, by, bw, bh)
                 )
                 x_list.append(bx_var)
                 y_list.append(by_var)
                 w_list.append(bw_var)
                 h_list.append(bh_var)
+                rect_layouts.append(bl)
                 N_indices.append(rect_count)
                 rect_count += 1
 
             # Add South branches
             for bx, by, bw, bh in Sb:
-                bx_var, by_var, bw_var, bh_var = self._define_rect_vars(
-                    (bx, by, bw, bh)
+                bx_var, by_var, bw_var, bh_var, bl = self._define_rect_by_kind(
+                    module_kind, idx, rect_count, (bx, by, bw, bh)
                 )
                 x_list.append(bx_var)
                 y_list.append(by_var)
                 w_list.append(bw_var)
                 h_list.append(bh_var)
+                rect_layouts.append(bl)
                 S_indices.append(rect_count)
                 rect_count += 1
 
             # Add East branches
             for bx, by, bw, bh in Eb:
-                bx_var, by_var, bw_var, bh_var = self._define_rect_vars(
-                    (bx, by, bw, bh)
+                bx_var, by_var, bw_var, bh_var, bl = self._define_rect_by_kind(
+                    module_kind, idx, rect_count, (bx, by, bw, bh)
                 )
                 x_list.append(bx_var)
                 y_list.append(by_var)
                 w_list.append(bw_var)
                 h_list.append(bh_var)
+                rect_layouts.append(bl)
                 E_indices.append(rect_count)
                 rect_count += 1
 
             # Add West branches
             for bx, by, bw, bh in Wb:
-                bx_var, by_var, bw_var, bh_var = self._define_rect_vars(
-                    (bx, by, bw, bh)
+                bx_var, by_var, bw_var, bh_var, bl = self._define_rect_by_kind(
+                    module_kind, idx, rect_count, (bx, by, bw, bh)
                 )
                 x_list.append(bx_var)
                 y_list.append(by_var)
                 w_list.append(bw_var)
                 h_list.append(bh_var)
+                rect_layouts.append(bl)
                 W_indices.append(rect_count)
                 rect_count += 1
 
@@ -397,103 +438,76 @@ class CasadiLegalizer:
                     y_sum=y_sum,
                 )
             )
+            self.module_has_variables.append(module_kind != "fixed")
+            self.rect_var_layouts.append(rect_layouts)
 
-        self.x_sym = ca.vertcat(*self.vars)
+        self.has_decision_vars = len(self.vars) > 0
+        self.x_sym = ca.vertcat(*self.vars) if self.vars else ca.SX.zeros(0, 1)
 
-        # Define parameters for dynamic updates
-        self.tau_param = ca.SX.sym("tau_param", 1)  # scalar tau
-        # Mask for active inter-module overlap constraints
-        num_inter_module_pairs = len(self.modules) * (len(self.modules) - 1) // 2
-        self.active_mask_param = ca.SX.sym(
-            "active_mask_param", num_inter_module_pairs
-        )  # binary mask
-        self.step_cap_param = ca.SX.sym(
-            "step_cap_param", 1
-        )  # scalar step cap for trust region
-        self.params = ca.vertcat(
-            self.tau_param, self.active_mask_param, self.step_cap_param
-        )
+        # 优化四：只保留 tau 这一个参数，其他的全通过 lbx/ubx / lbg 传进去
+        self.tau_param = ca.SX.sym("tau_param", 1)
+        self.params = self.tau_param
 
-        self.nlp_initialized = False
-
-    def _define_rect_vars(self, rect: BoxType) -> tuple[ca.SX, ca.SX, ca.SX, ca.SX]:
-        x = ca.SX.sym("x", 1)
-        y = ca.SX.sym("y", 1)
-        w = ca.SX.sym("w", 1)
-        h = ca.SX.sym("h", 1)
-        self.vars.extend([x, y, w, h])
-        self.lbx.extend([0.0, 0.0, 0.1, 0.1])
-        self.ubx.extend([self.dw, self.dh, self.dw, self.dh])
-        self.x0.extend([rect[0], rect[1], max(rect[2], 0.1), max(rect[3], 0.1)])
-        return x, y, w, h
-
-    def _rebuild_solver_instance(
-        self,
-        current_tau_val: float,
-        active_mask_vals: list[float],
-        prev_vals: Optional[list[float]],
-        step_cap_val: Optional[float],
-        otol: float,
-        rtol: float,
-        verbose: bool = False,
-    ) -> None:
+        # ==============================================================
+        # 优化一：在 __init__ 中一次性构建所有约束和目标函数 (Static NLP)
+        # ==============================================================
         g: list[ca.SX] = []
         lbg: list[float] = []
         ubg: list[float] = []
 
-        # 1. Bounds constraints (die) - for ALL rectangles
-        for m in self.modules:
+        # 1. Bounds constraints (die) - only for modules with decision vars
+        for mod_idx, m in enumerate(self.modules):
+            if not self.module_has_variables[mod_idx]:
+                continue
             for i in range(m.c):
                 g.append(m.x[i] - 0.5 * m.w[i])
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
                 g.append(m.y[i] - 0.5 * m.h[i])
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
                 g.append(m.x[i] + 0.5 * m.w[i] - self.dw)
-                lbg.append(-ca.inf)
+                lbg.append(float("-inf"))
                 ubg.append(0.0)
                 g.append(m.y[i] + 0.5 * m.h[i] - self.dh)
-                lbg.append(-ca.inf)
+                lbg.append(float("-inf"))
                 ubg.append(0.0)
 
-        # 2. Minimal area requirements (skip if al ~ 0 or hard/fixed module)
+        # 2. Minimal area requirements (soft modules only)
         for i, m in enumerate(self.modules):
-            # Skip area constraint for hard/fixed modules (dimensions are fixed)
-            has_fixed_dimensions = (
-                i in self.wl and 0 in self.wl[i] and i in self.hl and 0 in self.hl[i]
-            )
-            if self.al[i] > 1e-9 and not has_fixed_dimensions:
+            if self.al[i] > 1e-9 and self.module_kinds[i] == "soft":
                 g.append(m.area_expr)
                 lbg.append(self.al[i])
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
 
-        # 3. Aspect ratio constraint (linear in w,h):
-        #    min_aspect_ratio <= w/h <= max_ratio
-        # equivalent to:
-        #    h - max_ratio * w <= 0
-        #    min_aspect_ratio * w - h <= 0
+        # 3. Aspect ratio constraint (linear in w,h)
         for i, m in enumerate(self.modules):
-            # Skip aspect ratio constraint for hard/fixed modules
-            has_fixed_dimensions = (
-                i in self.wl and 0 in self.wl[i] and i in self.hl and 0 in self.hl[i]
-            )
-            if has_fixed_dimensions:
+            ar_min_i = self.min_aspect_ratio
+            ar_max_i = self.max_ratio
+            if i < len(self.min_ar_list) and i < len(self.max_ar_list):
+                mn = self.min_ar_list[i]
+                mx = self.max_ar_list[i]
+                if not (math.isnan(mn) or math.isnan(mx)):
+                    ar_min_i = float(mn)
+                    ar_max_i = float(mx)
+            ar_min_i = max(ar_min_i, 1e-8)
+            ar_max_i = max(ar_max_i, ar_min_i)
+            if self.module_kinds[i] != "soft":
                 continue
             for rect_idx in range(m.c):
-                g.append(m.h[rect_idx] - self.max_ratio * m.w[rect_idx])
-                lbg.append(-ca.inf)
+                g.append(m.h[rect_idx] - ar_max_i * m.w[rect_idx])
+                lbg.append(float("-inf"))
                 ubg.append(0.0)
-                g.append(self.min_aspect_ratio * m.w[rect_idx] - m.h[rect_idx])
-                lbg.append(-ca.inf)
+                g.append(ar_min_i * m.w[rect_idx] - m.h[rect_idx])
+                lbg.append(float("-inf"))
                 ubg.append(0.0)
 
         # 3.5. Attachment constraints: branches must attach to trunk
-        # Following legalizer.py: add_rect_north/south/east/west
-        for m in self.modules:
+        for mod_idx, m in enumerate(self.modules):
+            if not self.module_has_variables[mod_idx]:
+                continue
             trunk_x, trunk_y, trunk_w, trunk_h = m.x[0], m.y[0], m.w[0], m.h[0]
 
-            # North branches: yv = trunk_y + 0.5*trunk_h + 0.5*hv
             for rect_idx in m.N:
                 bx, by, bw, bh = (
                     m.x[rect_idx],
@@ -501,20 +515,16 @@ class CasadiLegalizer:
                     m.w[rect_idx],
                     m.h[rect_idx],
                 )
-                # Attachment
                 g.append(by - (trunk_y + 0.5 * trunk_h + 0.5 * bh))
                 lbg.append(0.0)
                 ubg.append(0.0)
-                # Border: xv >= trunk_x - 0.5*trunk_w + 0.5*wv
                 g.append(bx - (trunk_x - 0.5 * trunk_w + 0.5 * bw))
                 lbg.append(0.0)
-                ubg.append(ca.inf)
-                # Border: xv <= trunk_x + 0.5*trunk_w - 0.5*wv
+                ubg.append(float("inf"))
                 g.append((trunk_x + 0.5 * trunk_w - 0.5 * bw) - bx)
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
 
-            # South branches: yv = trunk_y - 0.5*trunk_h - 0.5*hv
             for rect_idx in m.S:
                 bx, by, bw, bh = (
                     m.x[rect_idx],
@@ -527,12 +537,11 @@ class CasadiLegalizer:
                 ubg.append(0.0)
                 g.append(bx - (trunk_x - 0.5 * trunk_w + 0.5 * bw))
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
                 g.append((trunk_x + 0.5 * trunk_w - 0.5 * bw) - bx)
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
 
-            # East branches: xv = trunk_x + 0.5*trunk_w + 0.5*wv
             for rect_idx in m.E:
                 bx, by, bw, bh = (
                     m.x[rect_idx],
@@ -545,12 +554,11 @@ class CasadiLegalizer:
                 ubg.append(0.0)
                 g.append(by - (trunk_y - 0.5 * trunk_h + 0.5 * bh))
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
                 g.append((trunk_y + 0.5 * trunk_h - 0.5 * bh) - by)
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
 
-            # West branches: xv = trunk_x - 0.5*trunk_w - 0.5*wv
             for rect_idx in m.W:
                 bx, by, bw, bh = (
                     m.x[rect_idx],
@@ -563,193 +571,116 @@ class CasadiLegalizer:
                 ubg.append(0.0)
                 g.append(by - (trunk_y - 0.5 * trunk_h + 0.5 * bh))
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
                 g.append((trunk_y + 0.5 * trunk_h - 0.5 * bh) - by)
                 lbg.append(0.0)
-                ubg.append(ca.inf)
+                ubg.append(float("inf"))
 
-        # 3.6. Intra-module non-overlap: consecutive branches in same direction must not overlap
-        for m in self.modules:
-            # North branches: sort by x, check consecutive pairs don't overlap
+        # 3.6. Intra-module non-overlap
+        for mod_idx, m in enumerate(self.modules):
+            if not self.module_has_variables[mod_idx]:
+                continue
             if len(m.N) > 1:
-                for i in range(len(m.N) - 1):
-                    idx1, idx2 = m.N[i], m.N[i + 1]
-                    # x1 + 0.5*w1 <= x2 - 0.5*w2
+                for ii in range(len(m.N) - 1):
+                    idx1, idx2 = m.N[ii], m.N[ii + 1]
                     g.append(m.x[idx1] + 0.5 * m.w[idx1] - m.x[idx2] + 0.5 * m.w[idx2])
-                    lbg.append(-ca.inf)
+                    lbg.append(float("-inf"))
                     ubg.append(0.0)
 
-            # South branches
             if len(m.S) > 1:
-                for i in range(len(m.S) - 1):
-                    idx1, idx2 = m.S[i], m.S[i + 1]
+                for ii in range(len(m.S) - 1):
+                    idx1, idx2 = m.S[ii], m.S[ii + 1]
                     g.append(m.x[idx1] + 0.5 * m.w[idx1] - m.x[idx2] + 0.5 * m.w[idx2])
-                    lbg.append(-ca.inf)
+                    lbg.append(float("-inf"))
                     ubg.append(0.0)
 
-            # East branches: sort by y
             if len(m.E) > 1:
-                for i in range(len(m.E) - 1):
-                    idx1, idx2 = m.E[i], m.E[i + 1]
+                for ii in range(len(m.E) - 1):
+                    idx1, idx2 = m.E[ii], m.E[ii + 1]
                     g.append(m.y[idx1] + 0.5 * m.h[idx1] - m.y[idx2] + 0.5 * m.h[idx2])
-                    lbg.append(-ca.inf)
+                    lbg.append(float("-inf"))
                     ubg.append(0.0)
 
-            # West branches
             if len(m.W) > 1:
-                for i in range(len(m.W) - 1):
-                    idx1, idx2 = m.W[i], m.W[i + 1]
+                for ii in range(len(m.W) - 1):
+                    idx1, idx2 = m.W[ii], m.W[ii + 1]
                     g.append(m.y[idx1] + 0.5 * m.h[idx1] - m.y[idx2] + 0.5 * m.h[idx2])
-                    lbg.append(-ca.inf)
+                    lbg.append(float("-inf"))
                     ubg.append(0.0)
 
-        # 4. Inter-module non-overlap: check ALL rectangle pairs between different modules
-        # Following legalizer.py: check all combinations of rectangles
+        # 4. Inter-module non-overlap: 静态添加所有模块对
         def smax(a: ca.SX, b: ca.SX, tau: ca.SX) -> ca.SX:
             return 0.5 * (a + b + ca.sqrt((a - b) * (a - b) + 4 * tau * tau))
 
+        self.overlap_g_indices: dict[int, list[int]] = {}
         pair_idx_counter = 0
         inter_module_constraints_added = 0
-        inter_module_pairs_skipped = 0
+        fixed_fixed_pairs_skipped = 0
 
         for i in range(len(self.modules)):
             for j in range(i + 1, len(self.modules)):
-                if (
-                    active_mask_vals[pair_idx_counter] > 0.5
-                ):  # if active (value > 0.5 means 1)
-                    mi, mj = self.modules[i], self.modules[j]
-                    for rect_i in range(mi.c):
-                        for rect_j in range(mj.c):
-                            xi, yi, wi, hi = (
-                                mi.x[rect_i],
-                                mi.y[rect_i],
-                                mi.w[rect_i],
-                                mi.h[rect_i],
-                            )
-                            xj, yj, wj, hj = (
-                                mj.x[rect_j],
-                                mj.y[rect_j],
-                                mj.w[rect_j],
-                                mj.h[rect_j],
-                            )
-                            t1 = (xi - xj) * (xi - xj) - 0.25 * (wi + wj) * (wi + wj)
-                            t2 = (yi - yj) * (yi - yj) - 0.25 * (hi + hj) * (hi + hj)
-                            g.append(smax(t1, t2, self.tau_param))
-                            lbg.append(0.0)
-                            ubg.append(ca.inf)
-                            inter_module_constraints_added += 1
-                else:
-                    inter_module_pairs_skipped += 1
+                # Both modules are fixed constants: no need to add overlap constraints.
+                # Keep pair index mapping with an empty list to preserve active-mask indexing.
+                if (not self.module_has_variables[i]) and (not self.module_has_variables[j]):
+                    self.overlap_g_indices[pair_idx_counter] = []
+                    pair_idx_counter += 1
+                    fixed_fixed_pairs_skipped += 1
+                    continue
+
+                mi, mj = self.modules[i], self.modules[j]
+                rect_g_indices: list[int] = []
+                for rect_i in range(mi.c):
+                    for rect_j in range(mj.c):
+                        xi, yi, wi, hi = (
+                            mi.x[rect_i],
+                            mi.y[rect_i],
+                            mi.w[rect_i],
+                            mi.h[rect_i],
+                        )
+                        xj, yj, wj, hj = (
+                            mj.x[rect_j],
+                            mj.y[rect_j],
+                            mj.w[rect_j],
+                            mj.h[rect_j],
+                        )
+                        t1 = (xi - xj) * (xi - xj) - 0.25 * (wi + wj) * (wi + wj)
+                        t2 = (yi - yj) * (yi - yj) - 0.25 * (hi + hj) * (hi + hj)
+                        g.append(smax(t1, t2, self.tau_param))
+                        rect_g_indices.append(len(g) - 1)
+                        lbg.append(0.0)
+                        ubg.append(float("inf"))
+                        inter_module_constraints_added += 1
+                self.overlap_g_indices[pair_idx_counter] = rect_g_indices
                 pair_idx_counter += 1
 
-        if verbose:
-            print(f"[Section 4] Inter-module non-overlap constraints:")
+        if self._solver_verbose:
+            print("[Section 4] Inter-module non-overlap (static, all pairs):")
             print(f"  - Total module pairs: {pair_idx_counter}")
-            print(
-                f"  - Active module pairs: {pair_idx_counter - inter_module_pairs_skipped}"
-            )
-            print(f"  - Skipped module pairs: {inter_module_pairs_skipped}")
-            print(
-                f"  - Total rectangle-pair constraints added: {inter_module_constraints_added}"
-            )
+            print(f"  - Fixed-fixed pairs skipped: {fixed_fixed_pairs_skipped}")
+            print(f"  - Total rectangle-pair constraints: {inter_module_constraints_added}")
 
-        # 5. Trust-Region constraints: |x - x_prev| <= step_cap
-        if prev_vals is not None and step_cap_val is not None and step_cap_val > 0:
-            for k, v_sym in enumerate(self.vars):
-                pv = float(
-                    prev_vals[k]
-                )  # pv comes from last_x, which is an x_sym solution
-                # v_sym - (pv + step_cap_val) <= 0
-                g.append(v_sym - (pv + self.step_cap_param))
-                lbg.append(-ca.inf)
-                ubg.append(0.0)
-                # (pv - step_cap_val) - v_sym <= 0  <=> v_sym >= pv - step_cap_val
-                g.append((pv - self.step_cap_param) - v_sym)
-                lbg.append(-ca.inf)
-                ubg.append(0.0)
-
-        # 0. Fixed and Hard module constraints
-        # Fixed modules: position AND dimensions are fixed
-        # Hard modules: only dimensions are fixed (position can be optimized)
-        n_fixed = 0
-        n_hard = 0
-        
-        for i, m in enumerate(self.modules):
-            module_name = self.og_names[i] if i < len(self.og_names) else f"Module_{i}"
-            
-            # Check if this module has fixed position (fixed module)
-            has_fixed_position = (
-                i in self.xl and 0 in self.xl[i] and i in self.yl and 0 in self.yl[i]
-            )
-            
-            # Check if this module has fixed dimensions (hard or fixed module)
-            has_fixed_dimensions = (
-                i in self.wl and 0 in self.wl[i] and i in self.hl and 0 in self.hl[i]
-            )
-
-            if has_fixed_position:
-                # Fix trunk position for fixed modules
-                g.append(m.x[0] - self.xl[i][0])
-                lbg.append(0.0)
-                ubg.append(0.0)
-                g.append(m.y[0] - self.yl[i][0])
-                lbg.append(0.0)
-                ubg.append(0.0)
-                n_fixed += 1
-
-                if verbose:
-                    print(
-                        f"[Section 0] Fixed module {module_name} position at ({self.xl[i][0]:.2f}, {self.yl[i][0]:.2f})"
-                    )
-            
-            if has_fixed_dimensions:
-                # Fix dimensions for hard/fixed modules
-                # Trunk (rectangle 0)
-                g.append(m.w[0] - self.wl[i][0])
-                lbg.append(0.0)
-                ubg.append(0.0)
-                g.append(m.h[0] - self.hl[i][0])
-                lbg.append(0.0)
-                ubg.append(0.0)
-                
-                # Branches (if any)
-                for rect_idx in range(1, m.c):
-                    if rect_idx in self.wl.get(i, {}) and rect_idx in self.hl.get(i, {}):
-                        g.append(m.w[rect_idx] - self.wl[i][rect_idx])
-                        lbg.append(0.0)
-                        ubg.append(0.0)
-                        g.append(m.h[rect_idx] - self.hl[i][rect_idx])
-                        lbg.append(0.0)
-                        ubg.append(0.0)
-                
-                if not has_fixed_position:
-                    n_hard += 1
-                
-                if verbose:
-                    print(
-                        f"[Section 0] {'Fixed' if has_fixed_position else 'Hard'} module {module_name} "
-                        f"dimensions fixed at ({self.wl[i][0]:.2f} x {self.hl[i][0]:.2f})"
-                    )
-        
-        if verbose and (n_fixed > 0 or n_hard > 0):
-            print(f"[Section 0] Total: {n_fixed} fixed modules, {n_hard} hard modules")
+        # 0. Module type summary (constraints removed for constants by construction)
+        if self._solver_verbose:
+            n_fixed = sum(1 for k in self.module_kinds if k == "fixed")
+            n_hard = sum(1 for k in self.module_kinds if k == "hard")
+            n_soft = sum(1 for k in self.module_kinds if k == "soft")
+            print(f"[Section 0] Module kinds: fixed={n_fixed}, hard={n_hard}, soft={n_soft}")
 
         # Objective: LSE(HPWL) with terminals as constants
         def stable_logsumexp(vals: list[ca.SX], a: float) -> ca.SX:
             ax = [a * v for v in vals]
-            m = ax[0]
+            mloc = ax[0]
             for v in ax[1:]:
-                m = ca.fmax(m, v)
+                mloc = ca.fmax(mloc, v)
             s = 0
             for v in ax:
-                s = s + ca.exp(v - m)
-            return m + ca.log(s)
+                s = s + ca.exp(v - mloc)
+            return mloc + ca.log(s)
 
         alpha = 1.0
         obj_terms: list[ca.SX] = []
 
         def module_center(m: ModuleVars) -> tuple[ca.SX, ca.SX]:
-            # Center of mass: weighted average of all rectangles
             area_safe = m.area_expr + 1e-10
             cx = m.x_sum / area_safe
             cy = m.y_sum / area_safe
@@ -758,8 +689,8 @@ class CasadiLegalizer:
         for weight, vertices, terminals in self.hyper:
             pts_x: list[ca.SX] = []
             pts_y: list[ca.SX] = []
-            for i in vertices:
-                cx, cy = module_center(self.modules[i])
+            for vi in vertices:
+                cx, cy = module_center(self.modules[vi])
                 pts_x.append(cx)
                 pts_y.append(cy)
             for tname in terminals:
@@ -784,32 +715,104 @@ class CasadiLegalizer:
         else:
             f = ca.SX(0)
 
-        self.g_sym = ca.vertcat(*g) if g else ca.SX()
+        self._lbg_base = lbg
+        self._ubg_base = ubg
+        self.g_sym = ca.vertcat(*g) if g else ca.SX.zeros(0, 1)
         self.f_sym = f
-
-        self._lbg_list = lbg
-        self._ubg_list = ubg
-
         self.nlp = {"x": self.x_sym, "p": self.params, "f": self.f_sym, "g": self.g_sym}
-        self.solver = ca.nlpsol(
-            "solver",
-            "ipopt",
-            self.nlp,
-            {
-                "ipopt.print_level": 0 if not verbose else 5,
-                "print_time": 0 if not verbose else 1,
-                "ipopt.tol": otol,
-                "ipopt.acceptable_tol": otol * 10,
-                "ipopt.constr_viol_tol": rtol,
-                "ipopt.acceptable_constr_viol_tol": rtol * 10,
-                "ipopt.warm_start_init_point": "yes" if prev_vals is not None else "no",
-                "ipopt.mu_strategy": "adaptive",
-                "ipopt.linear_solver": "mumps",
-                "ipopt.max_iter": 1000,
-                "ipopt.hessian_approximation": "limited-memory",
-                "expand": False,  # Disable CasADi expression expansion for SX variables
-            },
+
+        if self.has_decision_vars:
+            self.solver = ca.nlpsol(
+                "solver",
+                "ipopt",
+                self.nlp,
+                {
+                    "ipopt.print_level": 0 if not self._solver_verbose else 5,
+                    "print_time": 0 if not self._solver_verbose else 1,
+                    "ipopt.tol": otol_initial,
+                    "ipopt.acceptable_tol": otol_initial * 10,
+                    "ipopt.constr_viol_tol": rtol_initial,
+                    "ipopt.acceptable_constr_viol_tol": rtol_initial * 10,
+                    "ipopt.warm_start_init_point": "yes",
+                    "ipopt.mu_strategy": "adaptive",
+                    "ipopt.linear_solver": "mumps",
+                    #"ipopt.mu_oracle": "quality-function",
+                    "ipopt.max_iter": 20,
+                    "ipopt.hessian_approximation": "limited-memory",
+                    "expand": False,
+                },
+            )
+            self.const_eval = None
+        else:
+            self.solver = None
+            self.const_eval = ca.Function("const_eval", [self.params], [self.f_sym, self.g_sym])
+        self.nlp_initialized = True
+
+    def _new_scalar_var(
+        self, name: str, lb: float, ub: float, init: float
+    ) -> tuple[ca.SX, int]:
+        """Create one scalar decision variable with bounds/init and return (sym, index)."""
+        idx = len(self.vars)
+        v = ca.SX.sym(name, 1)
+        self.vars.append(v)
+        self.lbx.append(float(lb))
+        self.ubx.append(float(ub))
+        self.x0.append(float(init))
+        return v, idx
+
+    def _define_rect_consts(
+        self, rect: BoxType
+    ) -> tuple[ca.SX, ca.SX, ca.SX, ca.SX, dict[str, Optional[int]]]:
+        cx, cy, w, h = rect
+        return (
+            ca.SX(float(cx)),
+            ca.SX(float(cy)),
+            ca.SX(float(max(w, 0.1))),
+            ca.SX(float(max(h, 0.1))),
+            {"x": None, "y": None, "w": None, "h": None},
         )
+
+    def _hard_rect_dims(self, module_idx: int, rect_idx: int, rect: BoxType) -> tuple[float, float]:
+        """Return fixed dimensions for hard module rect, falling back to geometry if absent."""
+        _, _, rw, rh = rect
+        wv = self.wl.get(module_idx, {}).get(rect_idx, rw)
+        hv = self.hl.get(module_idx, {}).get(rect_idx, rh)
+        return float(max(wv, 0.1)), float(max(hv, 0.1))
+
+    def _define_rect_by_kind(
+        self, kind: str, module_idx: int, rect_idx: int, rect: BoxType
+    ) -> tuple[ca.SX, ca.SX, ca.SX, ca.SX, dict[str, Optional[int]]]:
+        """
+        Build one rectangle according to module kind:
+        - fixed: constants x,y,w,h
+        - hard : vars x,y; constants w,h
+        - soft : vars x,y,w,h
+        """
+        cx, cy, rw, rh = rect
+        if kind == "fixed":
+            return self._define_rect_consts(rect)
+
+        x, x_idx = self._new_scalar_var(
+            f"x_m{module_idx}_r{rect_idx}", 0.0, self.dw, float(cx)
+        )
+        y, y_idx = self._new_scalar_var(
+            f"y_m{module_idx}_r{rect_idx}", 0.0, self.dh, float(cy)
+        )
+
+        if kind == "hard":
+            wv, hv = self._hard_rect_dims(module_idx, rect_idx, rect)
+            w = ca.SX(wv)
+            h = ca.SX(hv)
+            return x, y, w, h, {"x": x_idx, "y": y_idx, "w": None, "h": None}
+
+        # soft
+        w, w_idx = self._new_scalar_var(
+            f"w_m{module_idx}_r{rect_idx}", 0.1, self.dw, float(max(rw, 0.1))
+        )
+        h, h_idx = self._new_scalar_var(
+            f"h_m{module_idx}_r{rect_idx}", 0.1, self.dh, float(max(rh, 0.1))
+        )
+        return x, y, w, h, {"x": x_idx, "y": y_idx, "w": w_idx, "h": h_idx}
 
     def solve(
         self,
@@ -822,42 +825,43 @@ class CasadiLegalizer:
         rtol: float,
         verbose: bool = False,
     ) -> dict[str, Any]:
-        # Rebuild solver instance for current iteration parameters and active set
-        self._rebuild_solver_instance(
-            current_tau_val,
-            active_mask_vals,
-            prev_vals,
-            step_cap_val,
-            otol,
-            rtol,
-            verbose,
-        )
+        del verbose  # IPOPT verbosity fixed at construction; kept for call-site compatibility
 
-        p_val = ca.vertcat(
-            current_tau_val,
-            ca.vertcat(*active_mask_vals),
-            step_cap_val if step_cap_val is not None else 0.0,
-        )
+        if not self.has_decision_vars:
+            f_val, g_val = self.const_eval(float(current_tau_val))
+            return {"x": ca.DM.zeros(0, 1), "f": f_val, "g": g_val}
+
+        dynamic_lbx = list(self.lbx)
+        dynamic_ubx = list(self.ubx)
+        if prev_vals is not None and step_cap_val is not None and step_cap_val > 0:
+            for k in range(len(self.vars)):
+                pv = float(prev_vals[k])
+                dynamic_lbx[k] = max(float(dynamic_lbx[k]), pv - step_cap_val)
+                dynamic_ubx[k] = min(float(dynamic_ubx[k]), pv + step_cap_val)
+
+        dynamic_lbg = list(self._lbg_base)
+        for pair_idx, is_active in enumerate(active_mask_vals):
+            if is_active <= 0.5:
+                for idx in self.overlap_g_indices[pair_idx]:
+                    dynamic_lbg[idx] = float("-inf")
 
         sol = self.solver(
             x0=x0,
-            lbx=self.lbx,
-            ubx=self.ubx,
-            lbg=self._lbg_list,
-            ubg=self._ubg_list,
-            p=p_val,
+            lbx=dynamic_lbx,
+            ubx=dynamic_ubx,
+            lbg=dynamic_lbg,
+            ubg=self._ubg_base,
+            p=current_tau_val,
         )
         return {"x": sol["x"], "f": sol["f"], "g": sol.get("g", None)}
 
     @property
     def _lbg(self) -> list[float]:
-        # this property is no longer used, bounds are returned from _rebuild_solver_instance
-        return self._lbg_list
+        return self._lbg_base
 
     @property
     def _ubg(self) -> list[float]:
-        # this property is no longer used, bounds are returned from _rebuild_solver_instance
-        return self._ubg_list
+        return self._ubg_base
 
     # Dummy helper (kept for interface completeness)
     def _numeric(self, *_, **__) -> list[float]:
@@ -878,7 +882,7 @@ def visualize_iteration(
 ) -> None:
     """Visualize current layout with HPWL and overlap information"""
     if not MATPLOTLIB_AVAILABLE:
-        print(" matplotlib not available, skipping visualization")
+        print("⚠️  matplotlib not available, skipping visualization")
         return
 
     fig, ax = plt.subplots(figsize=(12, 12))
@@ -984,7 +988,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
     # Check if plotting is enabled
     plot_enabled = options.get("plot", False)
     if plot_enabled and not MATPLOTLIB_AVAILABLE:
-        print(" Warning: --plot enabled but matplotlib not available")
+        print("⚠️  Warning: --plot enabled but matplotlib not available")
         print("    Install matplotlib: pip install matplotlib")
         plot_enabled = False
 
@@ -992,7 +996,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
     if plot_enabled:
         plot_dir = options.get("plot_dir", "plots")
         os.makedirs(plot_dir, exist_ok=True)
-        print(f" Plot directory: {plot_dir}")
+        print(f"📁 Plot directory: {plot_dir}")
 
     (
         ml,
@@ -1004,6 +1008,8 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
         die_width,
         die_height,
         hyper,
+        min_ar_list,
+        max_ar_list,
         min_aspect_ratio,
         max_ratio,
         og_names,
@@ -1069,6 +1075,37 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
                     total_overlap += overlap_area
         return total_overlap
 
+    init_tau = options.get("tau_initial")
+    if init_tau is None:
+        init_tau = 1e-3
+
+    model = CasadiLegalizer(
+        ml,
+        al,
+        xl,
+        yl,
+        wl,
+        hl,
+        die_width,
+        die_height,
+        hyper,
+        min_ar_list,
+        max_ar_list,
+        min_aspect_ratio,
+        max_ratio,
+        og_names,
+        wl_mult=options["wl_mult"],
+        tau_initial=float(init_tau),
+        tau_decay=1.0,
+        otol_initial=options.get("otol_initial", 1e-1),
+        otol_final=options.get("otol_final", 1e-4),
+        rtol_initial=options.get("rtol_initial", 1e-1),
+        rtol_final=options.get("rtol_final", 1e-4),
+        tol_decay=options.get("tol_decay", 0.5),
+        terminal_map=terminal_map,
+        verbose=options["verbose"],
+    )
+
     for i in range(options["num_iter"]):
 
         base_tau = options.get("tau_initial", None)
@@ -1113,33 +1150,8 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
                 pair_idx_counter += 1
 
         # Compute trust-region step size: proportional to die dimension, gradually decreasing
-        step_cap = 1.0* max_dim * (1.0 - 0.6 * (i / max(1, options["num_iter"] - 1)))
-        #step_cap = 0.5* max_dim 
-
-        # Create CasadiLegalizer instance (rebuilt each iteration with updated ml)
-        model = CasadiLegalizer(
-            ml,
-            al,
-            xl,
-            yl,
-            wl,
-            hl,
-            die_width,
-            die_height,
-            hyper,
-            min_aspect_ratio,
-            max_ratio,
-            og_names,
-            wl_mult=options["wl_mult"],
-            tau_initial=current_tau,
-            tau_decay=1.0,
-            otol_initial=options.get("otol_initial", 1e-1),
-            otol_final=options.get("otol_final", 1e-4),
-            rtol_initial=options.get("rtol_initial", 1e-1),
-            rtol_final=options.get("rtol_final", 1e-4),
-            tol_decay=options.get("tol_decay", 0.5),
-            terminal_map=terminal_map,
-        )
+        #step_cap = 1.0* max_dim * (1.0 - 0.6 * (i / max(1, options["num_iter"] - 1)))
+        step_cap = 0.333*radius_val* max_dim 
 
         current_otol = max(
             options.get("otol_initial", 1e-1) * (options.get("tol_decay", 0.5) ** i),
@@ -1177,20 +1189,20 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
         last_x = x
 
         # Extract solution and update ml for next iteration
-        # Map solution back to ml structure (trunk, Nb, Sb, Eb, Wb)
-        xi = 0
+        # Robust mapping via recorded per-rectangle variable layout.
         new_ml: list[InputModule] = []
         for mod_idx, (trunk, Nb, Sb, Eb, Wb) in enumerate(ml):
             m = model.modules[mod_idx]
-
-            # Extract all rectangles for this module
+            layouts = model.rect_var_layouts[mod_idx]
+            old_rects: list[BoxType] = [trunk] + list(Nb) + list(Sb) + list(Eb) + list(Wb)
             new_rects: list[BoxType] = []
             for rect_idx in range(m.c):
-                rx = float(x[xi])
-                ry = float(x[xi + 1])
-                rw = float(x[xi + 2])
-                rh = float(x[xi + 3])
-                xi += 4
+                old_rx, old_ry, old_rw, old_rh = old_rects[rect_idx]
+                lay = layouts[rect_idx]
+                rx = float(x[lay["x"]]) if lay["x"] is not None else float(old_rx)
+                ry = float(x[lay["y"]]) if lay["y"] is not None else float(old_ry)
+                rw = float(x[lay["w"]]) if lay["w"] is not None else float(old_rw)
+                rh = float(x[lay["h"]]) if lay["h"] is not None else float(old_rh)
                 new_rects.append((rx, ry, rw, rh))
 
             # Reconstruct (trunk, Nb, Sb, Eb, Wb) structure
@@ -1228,7 +1240,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
                 tau=current_tau,
             )
 
-        # Iteration stop criterion
+        # Iteration stop criterion: stop when overlap area < total_module_area * 0.01
         if current_overlap < overlap_threshold:
             print(
                 f"Early termination: overlap area {current_overlap:.6f} < threshold {overlap_threshold:.6f} (total_module_area * 0.01)"
@@ -1236,9 +1248,8 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
             break
 
     # Write output YAML with updated centers/sizes of ALL rectangles
-    if options["outfile"] is not None and last_x is not None:
+    if options["outfile"] is not None:
         net = Netlist(options["netlist"])
-        xi = 0
         ml_iter = 0
         for m in net.modules:
             # Skip terminals (is_iopin), not just fixed
@@ -1247,16 +1258,13 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
 
             # Get corresponding structure from ml
             trunk, Nb, Sb, Eb, Wb = ml[ml_iter]
+            mod_idx = ml_iter
             ml_iter += 1
 
-            # Update all rectangles for this module
+            # Update all rectangles for this module from final ml geometry.
             if m.rectangles:
                 # Update trunk (rectangles[0])
-                tx = float(last_x[xi])
-                ty = float(last_x[xi + 1])
-                tw = float(last_x[xi + 2])
-                th = float(last_x[xi + 3])
-                xi += 4
+                tx, ty, tw, th = trunk
                 m.rectangles[0].center.x = tx
                 m.rectangles[0].center.y = ty
                 m.rectangles[0].shape.w = tw
@@ -1265,25 +1273,13 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
                 # Update branches in order (Nb + Sb + Eb + Wb)
                 k = 1  # Next rectangle index
                 for group in (Nb, Sb, Eb, Wb):
-                    for _ in group:
+                    for (gx, gy, gw, gh) in group:
                         if k < len(m.rectangles):
-                            gx = float(last_x[xi])
-                            gy = float(last_x[xi + 1])
-                            gw = float(last_x[xi + 2])
-                            gh = float(last_x[xi + 3])
-                            xi += 4
                             m.rectangles[k].center.x = gx
                             m.rectangles[k].center.y = gy
                             m.rectangles[k].shape.w = gw
                             m.rectangles[k].shape.h = gh
                             k += 1
-                        else:
-                            # Consume variable indices to avoid misalignment
-                            xi += 4
-            else:
-                # No rectangles, but still consume variable indices
-                xi += 4  # trunk
-                xi += 4 * (len(Nb) + len(Sb) + len(Eb) + len(Wb))
 
         net.write_yaml(options["outfile"])
 

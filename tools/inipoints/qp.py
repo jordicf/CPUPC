@@ -2,13 +2,13 @@
 """
 Quadratic Placement (QP) standalone implementation
 Input: netlist.yaml (e.g., ami33.yaml) and die.yaml
-Output: placement result in YAML format 
+Output: placement result in YAML format (similar to n100.yaml)
 """
 
 import numpy as np
 import yaml
-from scipy.sparse import csr_matrix, lil_matrix
-from scipy.sparse.linalg import bicgstab
+from scipy.sparse import csr_matrix, lil_matrix, diags
+from scipy.sparse.linalg import cg
 from typing import Dict, List, Tuple
 import math
 import time
@@ -266,6 +266,11 @@ class PlacementDB:
             elif module.fixed:
                 if 'fixed' not in module_dict:
                     module_dict['fixed'] = True
+                # fixed/hard must be mutually exclusive for cpupc.netlist.Module
+                module_dict.pop('hard', None)
+                # In cpupc Module parser, fixed => is_hard=True, so these keys are illegal.
+                for k in ('area', 'length', 'center', 'aspect_ratio'):
+                    module_dict.pop(k, None)
                 # Output rectangles with original position and dimensions
                 if module.rectangles and len(module.rectangles) > 0:
                     module_dict['rectangles'] = [
@@ -284,6 +289,12 @@ class PlacementDB:
             elif module.hard:
                 if 'hard' not in module_dict:
                     module_dict['hard'] = True
+                # fixed/hard must be mutually exclusive for cpupc.netlist.Module
+                module_dict.pop('fixed', None)
+                # Keep output compatible with Module._check_consistency():
+                # hard modules cannot define area/length/center/aspect_ratio.
+                for k in ('area', 'length', 'center', 'aspect_ratio'):
+                    module_dict.pop(k, None)
                 # Output rectangles with updated center position, original dimensions
                 if module.rectangles and len(module.rectangles) > 0:
                     updated_rects = []
@@ -376,9 +387,10 @@ class PlacementDB:
 
 
 class QuadraticPlacer:
-    """Initial quadratic placement solver"""
-    def __init__(self, db: PlacementDB):
+    """Initial quadratic placement solver (clique or B2B net model)"""
+    def __init__(self, db: PlacementDB, net_model: str = "clique"):
         self.db = db
+        self.net_model = net_model.lower()
     
     def solve(self, max_iters: int = 20, tolerance: float = 1e-6):
         """Solve quadratic placement Ax=b for x and y"""
@@ -396,9 +408,12 @@ class QuadraticPlacer:
         for module in self.db.movable_modules:
             module.center = center.copy()
         
-        # Current solution vectors (clipped positions)
-        x_sol = np.array([m.center[0] for m in self.db.movable_modules])
-        y_sol = np.array([m.center[1] for m in self.db.movable_modules])
+        # CG warm-start vectors (raw solver output, not clipped)
+        x_cg = np.array([m.center[0] for m in self.db.movable_modules])
+        y_cg = np.array([m.center[1] for m in self.db.movable_modules])
+        # Clipped positions used for convergence check and module.center
+        x_sol = x_cg.copy()
+        y_sol = y_cg.copy()
         
         initial_hpwl = self.db.calc_hpwl()
         print(f"Initial HPWL: {initial_hpwl:.2f}")
@@ -406,35 +421,36 @@ class QuadraticPlacer:
         # Track for stability detection
         prev_hpwl = initial_hpwl
         stable_count = 0
-        use_default_tol = False  # Only warn once
+        print(f"Net model: {self.net_model}")
+        print(f"Solver: Jacobi-preconditioned CG")
         
         for iteration in range(max_iters):
-            # Build matrices
+            # Build matrices (uses module.center which are clipped positions)
             A_x, b_x = self._build_matrices('x')
             A_y, b_y = self._build_matrices('y')
             
-            # Solve using BiCGSTAB
-            try:
-                x_new, info_x = bicgstab(A_x, b_x, x0=x_sol, tol=tolerance, maxiter=100)
-                y_new, info_y = bicgstab(A_y, b_y, x0=y_sol, tol=tolerance, maxiter=100)
-            except (TypeError, ValueError):
-                # Fallback for older scipy versions
-                x_new, info_x = bicgstab(A_x, b_x, x0=x_sol, maxiter=100)
-                y_new, info_y = bicgstab(A_y, b_y, x0=y_sol, maxiter=100)
-                if not use_default_tol:
-                    print("Note: Using default solver tolerance")
-                    use_default_tol = True
+            # Solve with Jacobi-preconditioned CG; warm-start from raw solver output
+            def _pcg_solve(A_mat, b_vec, x0_vec):
+                diag_vals = A_mat.diagonal().copy()
+                diag_vals = np.maximum(diag_vals, 1e-10)
+                M_jacobi = diags(1.0 / diag_vals)
+                return cg(A_mat, b_vec, x0=x0_vec, rtol=tolerance, maxiter=200, M=M_jacobi)
+
+            x_new, info_x = _pcg_solve(A_x, b_x, x_cg)
+            y_new, info_y = _pcg_solve(A_y, b_y, y_cg)
             
-            # Clip positions to core boundaries
+            # Keep raw solver output for next CG warm-start
+            x_cg = np.asarray(x_new).ravel()
+            y_cg = np.asarray(y_new).ravel()
+            
+            # Clip positions to core boundaries (for module.center and convergence)
             for i, module in enumerate(self.db.movable_modules):
-                new_pos = np.array([x_new[i], y_new[i]])
+                new_pos = np.array([x_cg[i], y_cg[i]])
                 module.center = self.db.clip_to_core(new_pos, module)
             
-            # Get clipped positions for error calculation
             x_clipped = np.array([m.center[0] for m in self.db.movable_modules])
             y_clipped = np.array([m.center[1] for m in self.db.movable_modules])
             
-            # Calculate error using CLIPPED positions (actual position change)
             x_err = np.linalg.norm(x_clipped - x_sol)
             y_err = np.linalg.norm(y_clipped - y_sol)
             error = max(x_err, y_err)
@@ -442,7 +458,7 @@ class QuadraticPlacer:
             
             print(f"Iter {iteration:3d}: Error={error:.6e}, HPWL={hpwl:.2f}")
             
-            # Update solution vectors with clipped positions
+            # Update clipped positions for next convergence check
             x_sol = x_clipped
             y_sol = y_clipped
             
@@ -470,62 +486,99 @@ class QuadraticPlacer:
         
         return qp_runtime
     
+    def _add_edge(self, A, b, pin_a, pin_b, weight: float, coord_idx: int):
+        """Add a single weighted edge between two pins to the linear system."""
+        is_a_mov = not (pin_a.io_pin or pin_a.fixed)
+        is_b_mov = not (pin_b.io_pin or pin_b.fixed)
+
+        if is_a_mov and is_b_mov:
+            ia, ib = pin_a.idx, pin_b.idx
+            A[ia, ia] += weight
+            A[ib, ib] += weight
+            A[ia, ib] -= weight
+            A[ib, ia] -= weight
+        elif not is_a_mov and is_b_mov:
+            ib = pin_b.idx
+            A[ib, ib] += weight
+            b[ib] += weight * pin_a.center[coord_idx]
+        elif is_a_mov and not is_b_mov:
+            ia = pin_a.idx
+            A[ia, ia] += weight
+            b[ia] += weight * pin_b.center[coord_idx]
+
     def _build_matrices(self, coord: str) -> Tuple[csr_matrix, np.ndarray]:
         """
-        Build sparse matrix A and vector b for coordinate 'x' or 'y'
-        
-        Module classification for QP:
-        - Movable: soft and hard modules (position can be optimized)
-        - Anchor: io_pins and fixed modules (position fixed, act as anchors)
+        Build sparse matrix A and vector b for coordinate 'x' or 'y'.
+
+        Net model is selected by self.net_model:
+        - "clique" : constant weight w = w_net/(p-1), all pairs  O(p^2)
+        - "b2b"    : position-dependent 1/d weights, boundary edges only  O(p)
         """
         n_movable = len(self.db.movable_modules)
         A = lil_matrix((n_movable, n_movable))
         b = np.zeros(n_movable)
-        
         coord_idx = 0 if coord == 'x' else 1
-        
-        for net in self.db.nets:
-            pin_count = len(net.module_indices)
-            if pin_count < 2:
-                continue
-            
-            # Use net weight × edge weight (following ePlace)
-            # net.weight: user-defined importance of this net
-            # 1/(pin_count-1): clique model edge weight
-            weight = net.weight / (pin_count - 1)
-            
-            for i in range(pin_count):
-                pin1 = net.module_indices[i]
-                # Movable = not io_pin and not fixed
-                # Hard modules ARE movable (just with fixed dimensions)
-                is_pin1_movable = not (pin1.io_pin or pin1.fixed)
-                
-                for j in range(i + 1, pin_count):
-                    pin2 = net.module_indices[j]
-                    is_pin2_movable = not (pin2.io_pin or pin2.fixed)
-                    
-                    # Both movable (soft or hard)
-                    if is_pin1_movable and is_pin2_movable:
-                        idx1 = pin1.idx
-                        idx2 = pin2.idx
-                        A[idx1, idx1] += weight
-                        A[idx2, idx2] += weight
-                        A[idx1, idx2] -= weight
-                        A[idx2, idx1] -= weight
-                    
-                    # pin1 is anchor (io_pin or fixed), pin2 movable
-                    elif not is_pin1_movable and is_pin2_movable:
-                        idx2 = pin2.idx
-                        A[idx2, idx2] += weight
-                        b[idx2] += weight * pin1.center[coord_idx]
-                    
-                    # pin1 movable, pin2 is anchor (io_pin or fixed)
-                    elif is_pin1_movable and not is_pin2_movable:
-                        idx1 = pin1.idx
-                        A[idx1, idx1] += weight
-                        b[idx1] += weight * pin2.center[coord_idx]
-        
+
+        if self.net_model == "b2b":
+            self._build_b2b(A, b, coord_idx)
+        else:
+            self._build_clique(A, b, coord_idx)
+
         return A.tocsr(), b
+
+    def _build_clique(self, A, b, coord_idx: int):
+        """Clique model: constant weight, all-pairs connectivity."""
+        for net in self.db.nets:
+            pins = net.module_indices
+            p = len(pins)
+            if p < 2:
+                continue
+            w = net.weight / (p - 1)
+            for i in range(p):
+                for j in range(i + 1, p):
+                    self._add_edge(A, b, pins[i], pins[j], w, coord_idx)
+
+    def _build_b2b(self, A, b, coord_idx: int):
+        """B2B model: position-dependent 1/d weights, boundary edges only."""
+        eps = 1e-6
+        for net in self.db.nets:
+            pins = net.module_indices
+            p = len(pins)
+            if p < 2:
+                continue
+
+            positions = [pin.center[coord_idx] for pin in pins]
+            i_min = int(np.argmin(positions))
+            i_max = int(np.argmax(positions))
+            span = abs(positions[i_max] - positions[i_min])
+
+            if span < eps:
+                # Degenerate: all pins ~same location -> star from i_min (B2B center)
+                w = net.weight / (p - 1)
+                for k in range(p):
+                    if k == i_min:
+                        continue
+                    self._add_edge(A, b, pins[i_min], pins[k], w, coord_idx)
+                continue
+
+            # Clamp floor: distances below span/1000 are clamped to avoid
+            # extreme weights that blow up the condition number.
+            d_floor = max(eps, span * 1e-3)
+
+            # Bound-to-bound edge
+            w_bb = net.weight * 2.0 / ((p - 1) * span)
+            self._add_edge(A, b, pins[i_min], pins[i_max], w_bb, coord_idx)
+
+            # Interior pins -> both bounds
+            for k in range(p):
+                if k == i_min or k == i_max:
+                    continue
+                d_lo = max(abs(positions[k] - positions[i_min]), d_floor)
+                d_hi = max(abs(positions[k] - positions[i_max]), d_floor)
+                w_lo = net.weight * 2.0 / ((p - 1) * d_lo)
+                w_hi = net.weight * 2.0 / ((p - 1) * d_hi)
+                self._add_edge(A, b, pins[k], pins[i_min], w_lo, coord_idx)
+                self._add_edge(A, b, pins[k], pins[i_max], w_hi, coord_idx)
 
 
 def visualize_placement(db: PlacementDB, output_image: str, title: str = "QP Placement") -> bool:
@@ -749,10 +802,13 @@ Examples:
     parser.add_argument('netlist', type=str, help='Input netlist YAML file (e.g., ami33.yaml)')
     parser.add_argument('die', type=str, help='Input die YAML file (e.g., ami33_die.yaml)')
     parser.add_argument('output', type=str, help='Output placement YAML file')
-    parser.add_argument('--max-iters', type=int, default=200,
+    parser.add_argument('--max-iters', type=int, default=500,
                        help='Maximum iterations for QP solver (default: 200)')
     parser.add_argument('--tolerance', type=float, default=1e-6,
                        help='Convergence tolerance (default: 1e-6)')
+    parser.add_argument('--net-model', type=str, default='clique',
+                       choices=['clique', 'b2b'],
+                       help='Net model: "clique" (constant weight, all pairs) or "b2b" (1/d weight, boundary edges) (default: clique)')
     parser.add_argument('--output-image', type=str, default=None,
                        help='Output visualization image file (e.g., output.png)')
     parser.add_argument('--verify', action='store_true',
@@ -776,7 +832,7 @@ Examples:
     db.load_yaml(args.netlist, args.die)
     
     # Run quadratic placement
-    qp = QuadraticPlacer(db)
+    qp = QuadraticPlacer(db, net_model=args.net_model)
     qp_time = qp.solve(max_iters=args.max_iters, tolerance=args.tolerance)
     
     # Save result
