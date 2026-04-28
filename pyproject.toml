@@ -13,7 +13,7 @@ dependencies = [
     "gekko",
     "casadi",
     "numpy",
-    “scipy",
+    "scipy",
     "matplotlib",
     "distinctipy",
     "Pillow",
