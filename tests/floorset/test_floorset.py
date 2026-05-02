@@ -7,6 +7,7 @@ import unittest
 from pathlib import Path
 import os
 import subprocess
+from pprint import pprint
 
 
 class TestFloorset(unittest.TestCase):
@@ -27,6 +28,7 @@ class TestFloorset(unittest.TestCase):
             + str(Path(__file__).resolve().parents[2] / "tools" / "cpupc_tools.py")
             + " "
         )
+        pprint(f"Using CPUPC command: {cls.cpupc_cmd}")
         parent = Path(__file__).resolve().parent
         cls.netlist = str(parent / "netlist.yml")
         cls.out_netlist = str(parent / "output_netlist.yml")
@@ -48,19 +50,28 @@ class TestFloorset(unittest.TestCase):
             if os.path.exists(file):
                 os.remove(file)
 
+    def _ensure_floorset_files(self):
+        if all(os.path.exists(file) for file in [self.data, self.label, self.names]):
+            return
+        cmd = f"{self.cpupc_cmd} writefloorset {self.files} {self.netlist}"
+        result = subprocess.run(cmd.split()).returncode
+        self.assertEqual(result, 0)
+
     def test_a_writefloorset(self):
         cmd = f"{self.cpupc_cmd} writefloorset {self.files} {self.netlist}"
-        result = subprocess.call(cmd, shell=True)
+        result = subprocess.run(cmd.split()).returncode
         self.assertEqual(result, 0)
 
     def test_b_readfloorset(self):
+        self._ensure_floorset_files()
         cmd_read = (
             f"{self.cpupc_cmd} readfloorset {self.files} --netlist {self.out_netlist}"
         )
-        result_read = subprocess.call(cmd_read, shell=True)
+        result_read = subprocess.run(cmd_read.split()).returncode
         self.assertEqual(result_read, 0)
 
     def test_c_validate(self):
+        self._ensure_floorset_files()
         cmd_validate = f"{self.cpupc_cmd} validate {self.files} -err {self.error_log} "
         for opt, numerr in [
             ("--area", 1),
@@ -71,7 +82,7 @@ class TestFloorset(unittest.TestCase):
             ("--all", 6),
         ]:
             cmd_opt = cmd_validate + opt
-            result_validate = subprocess.call(cmd_opt, shell=True)
+            result_validate = subprocess.run(cmd_opt.split()).returncode
             self.assertEqual(
                 result_validate,
                 numerr,
@@ -81,7 +92,7 @@ class TestFloorset(unittest.TestCase):
         cmd_opt = cmd_validate + "--ar "
         for ar, numerr in [(1.5, 3), (2.3, 1), (2.5, 0)]:
             cmd_ar = cmd_opt + str(ar)
-            result_ar = subprocess.call(cmd_ar)
+            result_ar = subprocess.run(cmd_ar.split()).returncode
             self.assertEqual(
                 result_ar,
                 numerr,

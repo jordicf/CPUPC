@@ -63,8 +63,11 @@ def parse_options(
     return vars(parser.parse_args(args))
 
 
-def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
-    """Main function."""
+def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> int:
+    """Main function. Parses the command-line arguments, checks the constraints, and outputs the results.
+    :param prog: tool name (optional, default: sys.argv[0])
+    :param args: command-line arguments (optional, default: sys.argv[1:])
+    :return: number of errors found"""
     options = parse_options(prog, args)
     options_checks = ["area", "overlap", "mib", "cluster", "boundary", "hard", "fixed"]
 
@@ -121,7 +124,7 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
             for error in errors:
                 f.write(f"{error}\n")
 
-    sys.exit(len(errors))
+    return len(errors)
 
 
 if __name__ == "__main__":

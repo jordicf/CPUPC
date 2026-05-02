@@ -7,6 +7,8 @@
 
 import argparse
 import importlib
+import sys
+from pathlib import Path
 
 # Modules that must be imported dynamically when invoking a tool.
 # The keys are the tool names, and the values are the module paths.
@@ -40,22 +42,40 @@ def main() -> None:
     parser.add_argument(
         "tool", choices=TOOLS.keys(), nargs=argparse.REMAINDER, help="tool to execute"
     )
+    # add the project to the python path so that tools can import other modules from the project
+    sys.path.append(str(Path(__file__).resolve().parents[1]))
     args = parser.parse_args()
-    if args.tool:
-        tool_name, tool_args = args.tool[0], args.tool[1:]
-        if tool_name in TOOLS:
-            try:
-                importlib.import_module(
-                    TOOLS[tool_name]).main(f"{PROJECT} {tool_name}",tool_args)
-            except Exception as e:
-                import traceback
-                traceback.print_exc()
-                print(f"Error ({tool_name}): {e}")
-        else:
-            print(f"Unknown {PROJECT} tool: {tool_name}")
-    else:
-        parser.print_help()
 
+    
+    if not args.tool:
+        parser.print_help()
+        sys.exit(1)
+
+    tool_name, tool_args = args.tool[0], args.tool[1:]
+
+    # Check for unknown tools before trying to import to provide a clearer error message
+    if tool_name not in TOOLS:
+        print(f"Unknown {PROJECT} tool: {tool_name}")
+        parser.print_help()
+        sys.exit(1)
+
+    try:
+        tool = importlib.import_module(TOOLS[tool_name])
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        print(f"Error importing {tool_name}: {e}")
+        sys.exit(1)
+
+    try:
+        sys.exit(tool.main(f"{PROJECT} {tool_name}", tool_args))
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        print(f"Error ({tool_name}): {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

@@ -41,11 +41,11 @@ class TestFPolygon(unittest.TestCase):
                 XY_Box(7, 8, 2, 5),
             ]
         )
-        pprint(f"r1 = {r1}")
+        #pprint(f"r1 = {r1}")
         self.assertEqual(r1.area, 27)
         strop = r1.largest_strop(FPolygon([XY_Box(3, 5, 1, 4.5)]))
         self.assertAlmostEqual(strop.similarity, 19.5 / 27, 7)
-        pprint(f"strop = {strop}")
+        #pprint(f"strop = {strop}")
         self.assertEqual(strop.area(), 19.5)
         self.assertEqual(strop.num_branches, 4)
 
@@ -56,15 +56,15 @@ class TestFPolygon(unittest.TestCase):
         assert strop is not None
         self.assertEqual(r.area, strop.area())
         self.assertEqual(strop.num_branches, 2)
-        pprint(f"r = {r}")
-        pprint(f"strop = {strop}")
+        #pprint(f"r = {r}")
+        #pprint(f"strop = {strop}")
         new_strop = strop.reduce_branches("E")
-        pprint(f"new_strop = {new_strop}")
+        #pprint(f"new_strop = {new_strop}")
         self.assertEqual(new_strop.area(), 12)
         self.assertEqual(new_strop.num_branches, 1)
         self.assertAlmostEqual(new_strop.similarity, 5 / 7, 7)
         new_strop = new_strop.reduce_branches("E")
-        pprint(f"new_strop = {new_strop}")
+        #pprint(f"new_strop = {new_strop}")
         self.assertEqual(new_strop.area(), 12)
         self.assertEqual(new_strop.num_branches, 0)
         self.assertAlmostEqual(new_strop.similarity, 5 / 7, 7)
@@ -90,15 +90,15 @@ class TestFPolygon(unittest.TestCase):
         self.assertEqual(r.area, strop.area())
         nbranches = 10
         self.assertEqual(strop.num_branches, nbranches)
-        pprint(f"r = {r}")
-        pprint(f"strop = {strop}")
+        #pprint(f"r = {r}")
+        #pprint(f"strop = {strop}")
         new_strop = strop.dup()
         i = 1
         while new_strop.num_branches > 3:
             new_strop = new_strop.reduce()
             nbranches -= 1
-            pprint(f"new_strop {i} = {new_strop}")
-            pprint(f"similarity = {new_strop.similarity}")
+            #pprint(f"new_strop {i} = {new_strop}")
+            #pprint(f"similarity = {new_strop.similarity}")
             self.assertAlmostEqual(new_strop.area(), 79, 7)
             self.assertEqual(new_strop.num_branches, nbranches)
             i += 1
@@ -107,8 +107,8 @@ class TestFPolygon(unittest.TestCase):
         while new_strop.num_branches > 0:
             new_strop = new_strop.reduce()
             nbranches -= 1
-            pprint(f"new_strop {i} = {new_strop}")
-            pprint(f"similarity = {new_strop.similarity}")
+            #pprint(f"new_strop {i} = {new_strop}")
+            #pprint(f"similarity = {new_strop.similarity}")
             self.assertAlmostEqual(new_strop.area(), 79, 7)
             self.assertEqual(new_strop.num_branches, nbranches)
             i += 1
