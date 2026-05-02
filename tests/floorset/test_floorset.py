@@ -6,6 +6,7 @@
 import unittest
 from pathlib import Path
 import os
+import subprocess
 
 
 class TestFloorset(unittest.TestCase):
@@ -49,14 +50,14 @@ class TestFloorset(unittest.TestCase):
 
     def test_a_writefloorset(self):
         cmd = f"{self.cpupc_cmd} writefloorset {self.files} {self.netlist}"
-        result = os.system(cmd)
+        result = subprocess.call(cmd, shell=True)
         self.assertEqual(result, 0)
 
     def test_b_readfloorset(self):
         cmd_read = (
             f"{self.cpupc_cmd} readfloorset {self.files} --netlist {self.out_netlist}"
         )
-        result_read = os.system(cmd_read)
+        result_read = subprocess.call(cmd_read, shell=True)
         self.assertEqual(result_read, 0)
 
     def test_c_validate(self):
@@ -70,7 +71,7 @@ class TestFloorset(unittest.TestCase):
             ("--all", 6),
         ]:
             cmd_opt = cmd_validate + opt
-            result_validate = os.system(cmd_opt)
+            result_validate = subprocess.call(cmd_opt, shell=True)
             self.assertEqual(
                 result_validate,
                 numerr,
@@ -80,7 +81,7 @@ class TestFloorset(unittest.TestCase):
         cmd_opt = cmd_validate + "--ar "
         for ar, numerr in [(1.5, 3), (2.3, 1), (2.5, 0)]:
             cmd_ar = cmd_opt + str(ar)
-            result_ar = os.system(cmd_ar)
+            result_ar = subprocess.call(cmd_ar)
             self.assertEqual(
                 result_ar,
                 numerr,
