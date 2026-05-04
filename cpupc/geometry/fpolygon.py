@@ -353,15 +353,19 @@ class FPolygon:
 
     _polygon: RPolygon  # The polygon represented in rportion
     _area: float  # The area of the polygon
+    _vertices: Optional[Vertices]  # The vertices of the polygon (if simple)
+    _convex: Optional[list[bool]]  # List of booleans indicating if the vertex is convex (True) or concave (False)
 
     def __init__(self, rectangles: Iterable[XY_Box] = list()):
         self._polygon = RPolygon()
         self._area = -1.0
-        self._strop_decomposition = None
+        self._vertices = None
+        self._convex = None
         for r in rectangles:
             self._polygon |= rclosedopen(
                 float(r.xmin), float(r.xmax), float(r.ymin), float(r.ymax)
             )
+            
 
     def dup(self) -> FPolygon:
         """Returns a deep copy of the Polygon."""
@@ -486,9 +490,16 @@ class FPolygon:
 
     def vertices(self) -> Vertices:
         """Converts a polygon into a sequence of vertices.
-        The polygon represents a simple polygon (without holes).
+        The sequence represents de boundaries of the polygon in clockwise order.
+        The edges are represented by segments between consecutive vertices.
+        The first vertex is the leftmost lowest vertex.
+        The polygon must be a simple polygon (connected and without holes).
         An exception is raised if the polygon is not simple."""
 
+        # Check if already computed
+        if self._vertices:
+            return self._vertices
+        
         boundary = self._polygon.boundary()
         edges = list(boundary.rectangle_partitioning())
 
@@ -522,27 +533,44 @@ class FPolygon:
         # Let just make it deterministic. Let us pick the lowest-leftmost vertex as start
         # The second vertex will be the adjacent one with lowest-leftmost coordinates
         start_vertex = min(cont.keys(), key=lambda p: (p[0], p[1]))
-        vertices: Vertices = [start_vertex]
+        self._vertices = [start_vertex]
         second_vertex = max(cont[start_vertex], key=lambda p: (p[1], p[0]))
         cont[start_vertex].remove(second_vertex)
         cont[second_vertex].remove(start_vertex)
-        vertices.append(second_vertex)
+        self._vertices.append(second_vertex)
         current = second_vertex
         while True:
             assert current is not None
             next_vertices = cont[current]
             if len(next_vertices) == 0:
-                assert vertices[0] == vertices[-1], "Not a simple polygon"
-                vertices.pop()  # Remove the last vertex (equal to the first)
+                assert self._vertices[0] == self._vertices[-1], "Not a simple polygon"
+                self._vertices.pop()  # Remove the last vertex (equal to the first)
                 break
             new_vertex = next_vertices.pop()
             cont[new_vertex].remove(current)
-            vertices.append(new_vertex)
+            self._vertices.append(new_vertex)
             current = new_vertex
 
         # Check that all points have been visited
-        assert len(vertices) == len(cont), "Not a simple polygon"
-        return vertices
+        assert len(self._vertices) == len(cont), "Not a simple polygon"
+        return self._vertices
+    
+    def convex(self) -> list[bool]:
+        """Returns a list of booleans indicating if the vertex is convex (True) or concave (False).
+        The list is in the same order as the vertices returned by vertices()."""
+        if self._convex:
+            return self._convex
+        
+        vertices = self.vertices()
+        n = len(vertices)
+        self._convex = [False] * n
+        for i in range(n):
+            p_prev = vertices[i-1]
+            p_curr = vertices[i]
+            p_next = vertices[(i+1) % n]
+            cross_product = (p_curr[0] - p_prev[0]) * (p_next[1] - p_curr[1]) - (p_curr[1] - p_prev[1]) * (p_next[0] - p_curr[0])
+            self._convex[i] = cross_product < 0  # Convex if cross product is negative (clockwise order)
+        return self._convex
 
 
 def vertices2polygon(vertices: Iterable[RPoint]) -> FPolygon:

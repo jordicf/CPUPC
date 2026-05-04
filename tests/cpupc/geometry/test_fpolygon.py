@@ -41,11 +41,11 @@ class TestFPolygon(unittest.TestCase):
                 XY_Box(7, 8, 2, 5),
             ]
         )
-        #pprint(f"r1 = {r1}")
+        # pprint(f"r1 = {r1}")
         self.assertEqual(r1.area, 27)
         strop = r1.largest_strop(FPolygon([XY_Box(3, 5, 1, 4.5)]))
         self.assertAlmostEqual(strop.similarity, 19.5 / 27, 7)
-        #pprint(f"strop = {strop}")
+        # pprint(f"strop = {strop}")
         self.assertEqual(strop.area(), 19.5)
         self.assertEqual(strop.num_branches, 4)
 
@@ -56,15 +56,15 @@ class TestFPolygon(unittest.TestCase):
         assert strop is not None
         self.assertEqual(r.area, strop.area())
         self.assertEqual(strop.num_branches, 2)
-        #pprint(f"r = {r}")
-        #pprint(f"strop = {strop}")
+        # pprint(f"r = {r}")
+        # pprint(f"strop = {strop}")
         new_strop = strop.reduce_branches("E")
-        #pprint(f"new_strop = {new_strop}")
+        # pprint(f"new_strop = {new_strop}")
         self.assertEqual(new_strop.area(), 12)
         self.assertEqual(new_strop.num_branches, 1)
         self.assertAlmostEqual(new_strop.similarity, 5 / 7, 7)
         new_strop = new_strop.reduce_branches("E")
-        #pprint(f"new_strop = {new_strop}")
+        # pprint(f"new_strop = {new_strop}")
         self.assertEqual(new_strop.area(), 12)
         self.assertEqual(new_strop.num_branches, 0)
         self.assertAlmostEqual(new_strop.similarity, 5 / 7, 7)
@@ -90,15 +90,15 @@ class TestFPolygon(unittest.TestCase):
         self.assertEqual(r.area, strop.area())
         nbranches = 10
         self.assertEqual(strop.num_branches, nbranches)
-        #pprint(f"r = {r}")
-        #pprint(f"strop = {strop}")
+        # pprint(f"r = {r}")
+        # pprint(f"strop = {strop}")
         new_strop = strop.dup()
         i = 1
         while new_strop.num_branches > 3:
             new_strop = new_strop.reduce()
             nbranches -= 1
-            #pprint(f"new_strop {i} = {new_strop}")
-            #pprint(f"similarity = {new_strop.similarity}")
+            # pprint(f"new_strop {i} = {new_strop}")
+            # pprint(f"similarity = {new_strop.similarity}")
             self.assertAlmostEqual(new_strop.area(), 79, 7)
             self.assertEqual(new_strop.num_branches, nbranches)
             i += 1
@@ -107,8 +107,8 @@ class TestFPolygon(unittest.TestCase):
         while new_strop.num_branches > 0:
             new_strop = new_strop.reduce()
             nbranches -= 1
-            #pprint(f"new_strop {i} = {new_strop}")
-            #pprint(f"similarity = {new_strop.similarity}")
+            # pprint(f"new_strop {i} = {new_strop}")
+            # pprint(f"similarity = {new_strop.similarity}")
             self.assertAlmostEqual(new_strop.area(), 79, 7)
             self.assertEqual(new_strop.num_branches, nbranches)
             i += 1
@@ -122,17 +122,19 @@ class TestVertices(unittest.TestCase):
     p3: FPolygon
     p4: FPolygon
     solution1: list[tuple[float, float]]
-    
+
     @classmethod
     def setUpClass(cls) -> None:
         # A simple polygon
-        cls.p1 = FPolygon([
-            XY_Box(0, 4, 2, 5),
-            XY_Box(2, 4, 2, 7),
-            XY_Box(3, 6, 0, 2),
-            XY_Box(4, 6, 0, 8),
-        ])
-        
+        cls.p1 = FPolygon(
+            [
+                XY_Box(0, 4, 2, 5),
+                XY_Box(2, 4, 2, 7),
+                XY_Box(3, 6, 0, 2),
+                XY_Box(4, 6, 0, 8),
+            ]
+        )
+
         cls.solution1 = [
             (0.0, 2.0),
             (0.0, 5.0),
@@ -147,29 +149,35 @@ class TestVertices(unittest.TestCase):
         ]
 
         # A disconnected polygon
-        cls.p2 = FPolygon([
-            XY_Box(0, 2, 0, 2),
-            XY_Box(3, 5, 3, 5),
-        ])
+        cls.p2 = FPolygon(
+            [
+                XY_Box(0, 2, 0, 2),
+                XY_Box(3, 5, 3, 5),
+            ]
+        )
 
         # A polygon with a hole
-        cls.p3 = FPolygon([
-            XY_Box(0, 1, 0, 3),
-            XY_Box(2, 3, 0, 3),
-            XY_Box(0, 3, 0, 1),
-            XY_Box(0, 3, 2, 3),
-        ])
+        cls.p3 = FPolygon(
+            [
+                XY_Box(0, 1, 0, 3),
+                XY_Box(2, 3, 0, 3),
+                XY_Box(0, 3, 0, 1),
+                XY_Box(0, 3, 2, 3),
+            ]
+        )
 
         # A complex polygon
-        cls.p4 = FPolygon([
-            XY_Box(1, 4, 6, 7),
-            XY_Box(0, 2, 2, 4),
-            XY_Box(2, 4, 2, 6),
-            XY_Box(4, 7, 3, 5),
-            XY_Box(3, 5, 0, 2),
-            XY_Box(5, 6, 1, 2),
-            XY_Box(4, 5, 0, 3),
-        ])
+        cls.p4 = FPolygon(
+            [
+                XY_Box(1, 4, 6, 7),
+                XY_Box(0, 2, 2, 4),
+                XY_Box(2, 4, 2, 6),
+                XY_Box(4, 7, 3, 5),
+                XY_Box(3, 5, 0, 2),
+                XY_Box(5, 6, 1, 2),
+                XY_Box(4, 5, 0, 3),
+            ]
+        )
 
     def test_polygon2vertices(self) -> None:
         self.assertEqual(self.p1.vertices(), self.solution1)
@@ -179,10 +187,48 @@ class TestVertices(unittest.TestCase):
     def test_vertices2polygon(self) -> None:
         new_poly = vertices2polygon(self.solution1)
         self.assertEqual(new_poly, self.p1)
-        
+
         vertices = self.p4.vertices()
         new_poly = vertices2polygon(vertices)
         self.assertEqual(new_poly, self.p4)
+
+    def test_convexity(self) -> None:
+        expected_convexity = [
+            True,
+            True,
+            False,
+            True,
+            False,
+            True,
+            True,
+            True,
+            True,
+            False,
+        ]
+        self.assertEqual(self.p1.convex(), expected_convexity)
+
+        convexity = self.p4.convex()
+        expected_convexity = [
+            True,
+            True,
+            False,
+            False,
+            True,
+            True,
+            True,
+            False,
+            True,
+            True,
+            False,
+            False,
+            True,
+            True,
+            False,
+            True,
+            True,
+            False,
+        ]
+        self.assertEqual(convexity, expected_convexity)
 
 
 if __name__ == "__main__":
