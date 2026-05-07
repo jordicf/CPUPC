@@ -152,8 +152,7 @@ def expand(netlist: Netlist, H: float, W: float,
         if m.is_fixed:
             fixed.add(len(centers) - 1)
         
-        if m.mib:
-            assert not (m.is_hard or m.is_fixed), "MIB modules must be soft and not fixed"
+        if m.mib and not m.is_hard:
             mib_dict[m.mib].append(len(centers) - 1)
 
         elif not m.is_hard: 

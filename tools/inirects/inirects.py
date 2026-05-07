@@ -9,7 +9,7 @@ from cpupc.netlist.netlist import Netlist
 from cpupc.netlist.module import Module, Boundary
 from cpupc.utils.keywords import KW
 from cpupc.geometry.geometry import Point, Rectangle, Shape
-from cpupc.netlist.netlist import HyperEdge
+from cpupc.netlist.netlist import HyperEdge, ModuleClusters
 
 from typing import Any
 
@@ -128,6 +128,38 @@ def _cleanup_floorset_nets(netlist: Netlist, added_nets: int) -> None:
     # delete the 4 fake corner modules
     for _ in range(4):
         netlist.modules.pop()
+
+def _cleanup_mibs(netlist: Netlist) -> None:
+    """
+    Detects MIB clusters with at least one hard module,
+    and sets all soft modules in that MIB to hard and
+    with the same shape.
+
+    We assume hard modules are rectangles and that the
+    input is consistent (no 2 hard modules of different
+    shape in the same MIB)
+    """
+    mibs: ModuleClusters = netlist.mib_clusters
+
+    for mib in mibs.get_clusters():
+        has_hard: bool = False
+        for module in mib:
+            if module.is_hard:
+                has_hard = True
+                ref: Rectangle = module.rectangles[0]
+                break
+
+        if has_hard:
+            for module in mib:
+                if module.is_hard:
+                    continue
+                module.is_hard = True
+                old_shape: Rectangle = module.rectangles[0]
+                module.rectangles[0] = \
+                    Rectangle(center=old_shape.center,
+                              shape=ref.shape,
+                              hard=True)
+    return netlist
 
 
 def _run_contract_expand(
@@ -266,6 +298,7 @@ def main(prog: str | None = None, args: list[str] | None = None) -> None:
         raise ValueError(f"Invalid output file type {out_path}, must be json or yaml")
 
     netlist: Netlist = Netlist(netlist_path)
+    netlist = _cleanup_mibs(netlist)
     die: Die = Die(die_path)
 
     hyperparams = {
