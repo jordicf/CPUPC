@@ -5,7 +5,6 @@
 
 """Tool to validate the constraints of a netlist in the floorset format."""
 
-import sys
 import argparse
 from typing import Any, Optional
 from .validnetlist import check_constraints

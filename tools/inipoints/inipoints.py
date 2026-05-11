@@ -31,7 +31,7 @@ def netlist_to_graph(netlist: Netlist) -> tuple[nx.Graph, dict[int, np.ndarray]]
         """
 
         # check if shape is undefined
-        if module.num_rectangles() == 0:
+        if module.num_rectangles == 0:
             area: float = module.area()
             width: float = np.sqrt(area)
             return (width, width)  # square bounding box
@@ -81,7 +81,7 @@ def netlist_to_graph(netlist: Netlist) -> tuple[nx.Graph, dict[int, np.ndarray]]
 
     for net in netlist._edges:
         # represent the net as a set of module ids
-        module_ids: set[int] = [name2id[x.name] for x in net.modules]
+        module_ids: list[int] = [name2id[x.name] for x in net.modules]
 
         n_mod: int = len(module_ids)
         weight: float = net.weight

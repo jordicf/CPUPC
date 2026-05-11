@@ -142,7 +142,7 @@ def simulated_annealing(
 
     # Real definitions
     points = NumbaList([jitPoint(p.x, p.y, p.nets) for p in net.points])
-    nets: NumbaList[jitNet] = NumbaList([jitNet(n.weight, n.points) for n in net.nets])
+    nets = NumbaList([jitNet(n.weight, n.points) for n in net.nets])
     movable: NumbaList[int] = NumbaList(net.movable)
     jit_net = jitNetlist(points, nets, movable)
 
