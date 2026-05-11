@@ -9,7 +9,6 @@ from __future__ import annotations
 import copy
 from typing import Iterable, Iterator, Optional
 from dataclasses import dataclass
-import portion as p
 from rportion import RPolygon, rclosedopen
 
 # Some auxiliary types
@@ -24,7 +23,9 @@ Vertices = list[RPoint]
 
 
 # Tuple to represent a rectangle in the interval [xmin, xmax, ymin, ymax]
-@dataclass
+# It is an immutable class with frozen=True and slots=True to save memory and improve performance.
+# It is also hashable and comparable for equality, so it can be used as a key in dictionaries and sets.
+@dataclass(frozen=True, slots=True)
 class XY_Box:
     xmin: float
     xmax: float
@@ -32,10 +33,15 @@ class XY_Box:
     ymax: float
 
     @property
+    def rpolygon(self) -> RPolygon:
+        """Returns the rectangle represented as an RPolygon."""
+        return rclosedopen(self.xmin, self.xmax, self.ymin, self.ymax)
+
+    @property
     def center(self) -> RPoint:
         """Returns the center of the box."""
         return ((self.xmin + self.xmax) / 2.0, (self.ymin + self.ymax) / 2.0)
-    
+
     @property
     def width(self) -> float:
         """Returns the width of the box."""
@@ -92,6 +98,35 @@ class XY_Box:
         dy = max(0.0, other.ymin - self.ymax, self.ymin - other.ymax)
         return dx + dy
 
+    def intersects(self, other: XY_Box) -> bool:
+        """Returns True if the two rectangles intersect (i.e., they have a non-empty intersection)."""
+        return (
+            self.xmin < other.xmax
+            and self.xmax > other.xmin
+            and self.ymin < other.ymax
+            and self.ymax > other.ymin
+        )
+
+    def __and__(self, other: XY_Box) -> Optional[XY_Box]:
+        """Returns the intersection of the two rectangles, or None if they do not intersect."""
+        if not self.intersects(other):
+            return None
+        return XY_Box(
+            max(self.xmin, other.xmin),
+            min(self.xmax, other.xmax),
+            max(self.ymin, other.ymin),
+            min(self.ymax, other.ymax),
+        )
+
+    def bbox(self, other: XY_Box) -> XY_Box:
+        """Returns the bounding box of the two rectangles."""
+        return XY_Box(
+            min(self.xmin, other.xmin),
+            max(self.xmax, other.xmax),
+            min(self.ymin, other.ymin),
+            max(self.ymax, other.ymax),
+        )
+
     def touch(self, other: XY_Box) -> bool:
         """Returns True if the two rectangles touch each other (i.e., they have
         at least one point in common)."""
@@ -102,67 +137,86 @@ class XY_Box:
             and self.ymax >= other.ymin
         )
 
-    def iso_area_absorb(self, other: XY_Box, direction: str) -> XY_Box:
+    def iso_area_absorb(self, other: XY_Box) -> XY_Box:
         """Returns a rectangle with the same area as the sum of the two
-        rectangles. The rectangle is aligned with the edge of the trunk
+        rectangles. The rectangle is aligned with the common edge of the two rectangles,
         corresponding to the direction (ymin for N, ymax for S, xmin for E, xmax for W).
         The biggest rectangle absorbs the smallest one by enlarging the corresponding edge
-        without exceeding the boundary of the other rectangle."""
-        assert direction in "NSEW", f"Invalid direction {direction} in iso_area_merge"
+        without exceeding the boundary of the other rectangle.
+        The two rectangles must be disjoint (i.e., they cannot intersect, but they can touch)."""
+
+        inter = self & other
+        assert inter is None or inter.area == 0.0, (
+            "The rectangles must be disjoint to be absorbed"
+        )
+
+        location = "*"
+        if self.ymin == other.ymin:
+            location = "N"
+        elif self.ymax == other.ymax:
+            location = "S"
+        elif self.xmin == other.xmin:
+            location = "E"
+        elif self.xmax == other.xmax:
+            location = "W"
+
+        assert location in "NSEW", "Invalid location in iso_area_merge"
+
         # This function is tedious, since it has many cases (NSEW, left/right/top/bottom)
         # pprint(f"Absorbing {self} and {other} in direction {direction}")
 
         big, small = (self, other) if self.area >= other.area else (other, self)
-        new_b = big.dup()
-        if direction in "NS":
+        xmin, xmax, ymin, ymax = big.xmin, big.xmax, big.ymin, big.ymax
+        if location in "NS":
             left = big.xmin < small.xmin
             if left:  # big is to the left of small
-                new_b.xmax += small.area / big.height
-                if new_b.xmax > small.xmax:
-                    inc_area = (new_b.xmax - small.xmax) * new_b.height
-                    new_b.xmax = small.xmax
-                    if direction == "N":
-                        new_b.ymax += inc_area / new_b.width
-                    else:  # direction == "S"
-                        new_b.ymin -= inc_area / new_b.width
+                xmax += small.area / big.height
+                if xmax > small.xmax:
+                    inc_area = (xmax - small.xmax) * ymax - ymin
+                    xmax = small.xmax
+                    if location == "N":
+                        ymax += inc_area / (xmax - xmin)
+                    else:  # location == "S"
+                        ymin -= inc_area / (xmax - xmin)
             else:  # big is to the right of small
-                new_b.xmin -= small.area / big.height
-                if new_b.xmin < small.xmin:
-                    inc_area = (small.xmin - new_b.xmin) * new_b.height
-                    new_b.xmin = small.xmin
-                    if direction == "N":
-                        new_b.ymax += inc_area / new_b.width
-                    else:  # direction == "S"
-                        new_b.ymin -= inc_area / new_b.width
-        else:  # direction in "EW"
+                xmin -= small.area / big.height
+                if xmin < small.xmin:
+                    inc_area = (small.xmin - xmin) * ymax - ymin
+                    xmin = small.xmin
+                    if location == "N":
+                        ymax += inc_area / (xmax - xmin)
+                    else:  # location == "S"
+                        ymin -= inc_area / (xmax - xmin)
+        else:  # location in "EW"
             top = big.ymin > small.ymin
             if top:  # big is above small
-                new_b.ymin -= small.area / big.width
-                if new_b.ymin < small.ymin:
-                    inc_area = (small.ymin - new_b.ymin) * new_b.width
-                    new_b.ymin = small.ymin
-                    if direction == "E":
-                        new_b.xmax += inc_area / new_b.height
-                    else:  # direction == "W"
-                        new_b.xmin -= inc_area / new_b.height
+                ymin -= small.area / big.width
+                if ymin < small.ymin:
+                    inc_area = (small.ymin - ymin) * ymax - ymin
+                    ymin = small.ymin
+                    if location == "E":
+                        xmax += inc_area / (xmax - xmin)
+                    else:  # location == "W"
+                        xmin -= inc_area / (xmax - xmin)
             else:  # big is below small
-                new_b.ymax += small.area / big.width
-                if new_b.ymax > small.ymax:
-                    inc_area = (new_b.ymax - small.ymax) * new_b.width
-                    new_b.ymax = small.ymax
-                    if direction == "E":
-                        new_b.xmax += inc_area / new_b.height
-                    else:  # direction == "W"
-                        new_b.xmin -= inc_area / new_b.height
+                ymax += small.area / big.width
+                if ymax > small.ymax:
+                    inc_area = (ymax - small.ymax) * (xmax - xmin)
+                    ymax = small.ymax
+                    if location == "E":
+                        xmax += inc_area / (xmax - xmin)
+                    else:  # location == "W"
+                        xmin -= inc_area / (xmax - xmin)
         # pprint(f"Result: {new_b}")
-        return new_b
+
+        return XY_Box(xmin, xmax, ymin, ymax)
 
 
 # Some methods to extend the functionality of rportion
 
 
-def _RPoly2Box(r: RPolygon) -> XY_Box:
-    """Converts a rectangle in RPolygon format to Rectangle format."""
+def RPoly2Box(r: RPolygon) -> XY_Box:
+    """Converts a rectangle in RPolygon format to XY_Box."""
     x_interval = r.x_enclosure_interval
     xmin, xmax = x_interval.lower, x_interval.upper
     y_interval = r.y_enclosure_interval
@@ -176,176 +230,6 @@ def _RPoly2Box(r: RPolygon) -> XY_Box:
     return XY_Box(float(xmin), float(xmax), float(ymin), float(ymax))
 
 
-class Strop:
-    """Class to represent the STROP of a polygon represented by a trunk
-    (a rectangle) and a set of branches (rectangles) in the four directions.
-    The branches are disjoint and do not overlap with the trunk.
-    The class provides methods to reduce the number of branches by merging
-    branches in a given direction. The class also provides a method to
-    compute the Jaccard similarity of the STROP with respect to the original
-    polygon."""
-
-    _ref: FPolygon
-    _trunk: XY_Box
-    _branches: dict[str, set[XY_Box]]  # str in 'N', 'S', 'E', 'W'
-    _similarity: float  # Jaccard similarity wrt the original polygon
-
-    def __init__(self, ref: FPolygon, trunk: XY_Box) -> None:
-        self._ref = ref
-        self._similarity = -1.0
-        self._trunk = trunk
-        self._branches = {"N": set(), "S": set(), "E": set(), "W": set()}
-
-    def __eq__(self, other: object) -> bool:
-        """Checks equality of two STROPs"""
-        if not isinstance(other, Strop):
-            return NotImplemented
-        return self._trunk == other._trunk and all(
-            self._branches[d] == other._branches[d] for d in "NSEW"
-        )
-
-    def __hash__(self) -> int:
-        """Returns a hash value for the STROP."""
-        h = hash(self._trunk)
-        for d in "NSEW":
-            for b in self._branches[d]:
-                h ^= hash(b)
-        return h
-
-    def dup(self) -> Strop:
-        """Returns a duplication of the Strop."""
-        c = Strop(self._ref, self._trunk)
-        c._branches = copy.deepcopy(self._branches)
-        return c
-
-    def __repr__(self) -> str:
-        s = f"T:{self._trunk}"
-        for d in "NSEW":
-            for b in self._branches[d]:
-                s += f"|{d}:{b}"
-        return s
-
-    @property
-    def trunk(self) -> XY_Box:
-        """Returns the trunk of the decomposition."""
-        return self._trunk
-
-    @property
-    def similarity(self) -> float:
-        """Returns the Jaccard similarity of the decomposition with
-        respect to the original polygon."""
-        if self._similarity < 0.0:
-            self._similarity = round(self._ref.jaccard_similarity(self.polygon), 8)
-        return self._similarity
-
-    def add_rectangle(self, r: XY_Box, direction: str) -> None:
-        """Adds a rectangle to the decomposition."""
-        if direction == "T":
-            self._trunk = r
-        else:
-            self._branches[direction].add(r)
-        self._similarity = -1.0  # Invalidate similarity
-
-    @property
-    def num_branches(self) -> int:
-        """Returns the number of branches in the decomposition."""
-        return sum(len(self._branches[d]) for d in "NSEW")
-
-    def all_rectangles(self, type: str = "*") -> Iterator[XY_Box]:
-        """Iterator over all rectangles in the decomposition.
-        type indicates the type of rectangles to be returned (T, N, S, E, W, *)"""
-        assert type in [
-            "T",
-            "N",
-            "S",
-            "E",
-            "W",
-            "*",
-        ], f"Invalid type {type} in all_rectangles"
-
-        if type in ["T"]:
-            yield self._trunk
-        elif type in ["N", "S", "E", "W"]:
-            for b in self._branches[type]:
-                yield b
-        else:  # type == '*'
-            yield self._trunk
-            for d in "NSEW":
-                for b in self._branches[d]:
-                    yield b
-
-    def area(self, type: str = "*") -> float:
-        """Returns the area of the decomposition.
-        If type is specified, only the area of that type of rectangles"""
-        return sum(r.area for r in self.all_rectangles(type))
-
-    @property
-    def polygon(self) -> FPolygon:
-        """Returns the polygon represented by the STROP decomposition."""
-        return FPolygon(self.all_rectangles())
-
-    def reduce(self) -> Strop:
-        """Reduces the number of branches of the STROP by reducing the
-        branches in one of the directions. It selects the direction that
-        maximizes the similarity with the original polygon.
-        Returns a new Strop with the same original area."""
-        assert self.num_branches > 0, "No branches to reduce"
-        similarity = -1.0
-        best_strop: Optional[Strop] = None
-        for d in "NSEW":
-            if len(self._branches[d]) > 0:
-                new_strop = self.reduce_branches(d)
-                if new_strop.similarity > similarity:
-                    similarity = new_strop.similarity
-                    best_strop = new_strop
-        assert best_strop is not None
-        return best_strop
-
-    def reduce_branches(self, direction: str) -> Strop:
-        """Reduces branches in the given direction by merging the
-        closest pair of branches. In case only one branch remains, the branch
-        is removed and the trunk is enlarged to keep the same area.
-        Returns a new Strop with the same original area."""
-        assert direction in "NSEW", f"Invalid direction {direction} in reduce_branches"
-        num_branches = len(self._branches[direction])
-        assert num_branches > 0, f"No branches in direction {direction} to reduce"
-
-        new_strop = self.dup()
-        if len(new_strop._branches[direction]) == 1:
-            area = self.area(direction)
-            tr = new_strop._trunk
-            new_strop._branches[direction].clear()
-            # Enlarge the trunk in the direction of the removed branches
-            if direction == "N":
-                tr.ymax += area / tr.width
-            elif direction == "S":
-                tr.ymin -= area / tr.width
-            elif direction == "E":
-                tr.xmax += area / tr.height
-            else:  # direction == "W"
-                tr.xmin -= area / tr.height
-            new_strop._trunk = tr
-            return new_strop
-
-        # Find the smallest branch in the direction
-        b1 = min(new_strop._branches[direction], key=lambda b: b.area)
-        # Find the closest branch to b1 in the direction
-        b2 = min(
-            (b for b in new_strop._branches[direction] if b != b1),
-            key=lambda b: b1.distance(b),
-        )
-        # Merge b1 and b2
-        new_b = b1.iso_area_absorb(b2, direction)
-        new_strop._branches[direction].remove(b1)
-        new_strop._branches[direction].remove(b2)
-        new_strop._branches[direction].add(new_b)
-
-        # Previous version: merge the closest pair of branches until only one branch remains
-        # b1, b2 = closest_boxes(new_strop._branches[direction])
-        # new_b = b1.iso_area_merge(b2, direction)
-        return new_strop
-
-
 class FPolygon:
     """Class for polygons based on the rportion library.
     The polygon is represented as a union of rectangles with
@@ -354,7 +238,9 @@ class FPolygon:
     _polygon: RPolygon  # The polygon represented in rportion
     _area: float  # The area of the polygon
     _vertices: Optional[Vertices]  # The vertices of the polygon (if simple)
-    _convex: Optional[list[bool]]  # List of booleans indicating if the vertex is convex (True) or concave (False)
+    _convex: Optional[
+        list[bool]
+    ]  # List of booleans indicating if the vertex is convex (True) or concave (False)
 
     def __init__(self, rectangles: Iterable[XY_Box] = list()):
         self._polygon = RPolygon()
@@ -365,7 +251,11 @@ class FPolygon:
             self._polygon |= rclosedopen(
                 float(r.xmin), float(r.xmax), float(r.ymin), float(r.ymax)
             )
-            
+
+    @property
+    def rpolygon(self) -> RPolygon:
+        """Returns the polygon represented as an RPolygon."""
+        return self._polygon
 
     def dup(self) -> FPolygon:
         """Returns a deep copy of the Polygon."""
@@ -378,115 +268,57 @@ class FPolygon:
         """Returns the area of the polygon"""
         if self._area < 0.0:
             self._area = sum(
-                _RPoly2Box(r).area for r in self._polygon.rectangle_partitioning()
+                RPoly2Box(r).area for r in self._polygon.rectangle_partitioning()
             )
         return self._area
+
+    @property
+    def is_simple(self) -> bool:
+        """Returns True if the polygon is simple (connected and without holes)."""
+        try:
+            self.vertices()
+            return True
+        except AssertionError:
+            return False
 
     def __or__(self, other: FPolygon) -> FPolygon:
         """Returns the union of polygons"""
         rec_copy = FPolygon()
-        rec_copy._polygon = self._polygon | other._polygon
+        rec_copy._polygon = self.rpolygon | other.rpolygon
         return rec_copy
 
     def __and__(self, other: FPolygon) -> FPolygon:
         """Returns the intersection of polygons"""
         rec_copy = FPolygon()
-        rec_copy._polygon = self._polygon & other._polygon
+        rec_copy._polygon = self.rpolygon & other.rpolygon
         return rec_copy
 
     def __sub__(self, other: FPolygon) -> FPolygon:
         """Returns the difference self-other"""
         rec_copy = FPolygon()
-        rec_copy._polygon = self._polygon - other._polygon
+        rec_copy._polygon = self.rpolygon - other.rpolygon
         return rec_copy
 
     def __eq__(self, other: object) -> bool:
         """Checks equality of two polygons"""
         if not isinstance(other, FPolygon):
             return NotImplemented
-        return self._polygon == other._polygon
+        return self.rpolygon == other.rpolygon
 
     def __repr__(self) -> str:
         """Returns the representation of the polygon"""
-        return repr(self._polygon)
+        return repr(self.rpolygon)
+
+    def maximal_rectangles(self) -> Iterator[XY_Box]:
+        """Returns an iterator of the maximal rectangles included in the polygon."""
+        for r in self.rpolygon.maximal_rectangles():
+            yield RPoly2Box(r)
 
     def jaccard_similarity(self, other: FPolygon) -> float:
         """Returns the Jaccard similarity between two polygons.
         The Jaccard similarity between two polygons P1 and P2 is a value
         in [0,1] defined as Area(P1&P2)/Area(P1|P2)."""
         return (self & other).area / (self | other).area
-
-    def generate_all_strops(self) -> Iterator[Strop]:
-        """Generates all possible STROP decompositions of the polygon."""
-        for r in self._polygon.maximal_rectangles():
-            trunk = FPolygon([_RPoly2Box(r)])
-            strop = self.largest_strop(trunk)
-            if strop.similarity == 1.0:
-                yield strop
-
-    def calculate_best_strop(self) -> Optional[Strop]:
-        """Calculates the best STROP decomposition (the one with the fewer
-        number of branches). If no STROP is found, None is returned"""
-        # Calculate all strops generated by maximal rectangles
-        all_strops = list(self.generate_all_strops())
-        if not all_strops:
-            return None
-        # Select the best one: the one with the fewer number of branches.
-        # In case of ties, the one with the largest trunk area
-        return min(all_strops, key=lambda s: (s.num_branches, -s.trunk.area))
-
-    def largest_strop(self, trunk: FPolygon) -> Strop:
-        """Returns the largest strop included in self that has the
-        associated trunk. The trunk is assumed to be a rectangle.
-        """
-
-        tr = _RPoly2Box(trunk._polygon)
-
-        # Build the corners that must be subtracted
-        ne = rclosedopen(tr.xmax, p.inf, tr.ymax, p.inf)
-        nw = rclosedopen(-p.inf, tr.xmin, tr.ymax, p.inf)
-        se = rclosedopen(tr.xmax, p.inf, -p.inf, tr.ymin)
-        sw = rclosedopen(-p.inf, tr.xmin, -p.inf, tr.ymin)
-
-        remainder = self._polygon - trunk._polygon - ne - nw - se - sw
-
-        # The remainder covers all branches.
-
-        # Classify the branches ('T', 'N', 'S', 'E', 'W')
-        # Add the coordinate of the farthest edge to the trunk
-        branches = list[tuple[RPolygon, str, float]]()
-        for r in remainder.maximal_rectangles():
-            b = _RPoly2Box(r)
-            if not tr.touch(b):
-                continue
-
-            if b.xmax > tr.xmax:
-                branches.append((r, "E", b.xmax))
-            elif b.xmin < tr.xmin:
-                branches.append((r, "W", -b.xmin))
-            elif b.ymax > tr.ymax:
-                branches.append((r, "N", b.ymax))
-            elif b.ymin < tr.ymin:
-                branches.append((r, "S", -b.ymin))
-            else:
-                raise ValueError("Unexpected branch")
-
-        # Compute a disjoint set of branches.
-        # Sort the branches by distance of the farthest edge to the trunk.
-        # Then visit the branches and subtract the parts that overlap
-        # with previous branches
-        branches.sort(reverse=True, key=lambda r: r[2])
-        prev_branches = RPolygon()
-        strop = Strop(self, _RPoly2Box(trunk._polygon))
-
-        for br in branches:
-            new_b = br[0] - prev_branches
-            if not new_b.empty:
-                strop.add_rectangle(_RPoly2Box(new_b), br[1])
-            prev_branches |= new_b
-
-        return strop
-
 
     def vertices(self) -> Vertices:
         """Converts a polygon into a sequence of vertices.
@@ -499,7 +331,7 @@ class FPolygon:
         # Check if already computed
         if self._vertices:
             return self._vertices
-        
+
         boundary = self._polygon.boundary()
         edges = list(boundary.rectangle_partitioning())
 
@@ -509,7 +341,7 @@ class FPolygon:
         # adjacent vertices (each vertex should have 2 adjacent vertices)
         cont = dict[RPoint, set[RPoint]]()
         for e in edges:
-            box = _RPoly2Box(e)
+            box = RPoly2Box(e)
             if box.is_vertical_edge:
                 p1 = (box.xmin, box.ymin)
                 p2 = (box.xmin, box.ymax)
@@ -525,7 +357,7 @@ class FPolygon:
                 cont[p2] = set()
             cont[p1].add(p2)
             cont[p2].add(p1)
-            
+
         # Sanity check that all vertices have degree 2
         for v, adj in cont.items():
             assert len(adj) == 2, f"Vertex {v} has degree {len(adj)} != 2"
@@ -554,22 +386,26 @@ class FPolygon:
         # Check that all points have been visited
         assert len(self._vertices) == len(cont), "Not a simple polygon"
         return self._vertices
-    
+
     def convex(self) -> list[bool]:
         """Returns a list of booleans indicating if the vertex is convex (True) or concave (False).
         The list is in the same order as the vertices returned by vertices()."""
         if self._convex:
             return self._convex
-        
+
         vertices = self.vertices()
         n = len(vertices)
         self._convex = [False] * n
         for i in range(n):
-            p_prev = vertices[i-1]
+            p_prev = vertices[i - 1]
             p_curr = vertices[i]
-            p_next = vertices[(i+1) % n]
-            cross_product = (p_curr[0] - p_prev[0]) * (p_next[1] - p_curr[1]) - (p_curr[1] - p_prev[1]) * (p_next[0] - p_curr[0])
-            self._convex[i] = cross_product < 0  # Convex if cross product is negative (clockwise order)
+            p_next = vertices[(i + 1) % n]
+            cross_product = (p_curr[0] - p_prev[0]) * (p_next[1] - p_curr[1]) - (
+                p_curr[1] - p_prev[1]
+            ) * (p_next[0] - p_curr[0])
+            self._convex[i] = (
+                cross_product < 0
+            )  # Convex if cross product is negative (clockwise order)
         return self._convex
 
 
@@ -593,9 +429,7 @@ def vertices2polygon(vertices: Iterable[RPoint]) -> FPolygon:
         new_v = {p for p in v if pk[0] <= p[0] <= pl[0] and p[1] > pk[1]}
         # Pick the point with minimum y coordinate
         pm = min(new_v, key=lambda p: (p[1], p[0]))
-        rectangles.append(
-            XY_Box(pk[0], pl[0], pk[1], pm[1])
-        )
+        rectangles.append(XY_Box(pk[0], pl[0], pk[1], pm[1]))
         # Update the vertex set
         pkm = (pk[0], pm[1])
         plm = (pl[0], pm[1])
