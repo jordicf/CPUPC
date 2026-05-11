@@ -11,6 +11,7 @@ from cpupc.utils.utils import Python_object
 from cpupc.utils.keywords import KW
 from cpupc.netlist.module import Boundary
 from cpupc.geometry.fpolygon import RPoint, vertices2polygon
+from cpupc.geometry.strop import Strop
 
 
 def read_floorset_netlist(
@@ -121,8 +122,7 @@ def read_floorset_netlist(
         ymin = min(ymin, min(v[1] for v in vertices))
         ymax = max(ymax, max(v[1] for v in vertices))
         polygon = vertices2polygon(vertices)
-        strop = polygon.calculate_best_strop()
-        assert strop is not None, f"Cannot calculate strop for module {mod_name}"
+        strop = Strop(polygon)
         list_rectangles: list[list[float]] = []
         for rect in strop.all_rectangles():
             center = rect.center
