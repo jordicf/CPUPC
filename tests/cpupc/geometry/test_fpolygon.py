@@ -145,15 +145,16 @@ class TestVertices(unittest.TestCase):
         )
 
     def test_polygon2vertices(self) -> None:
-        self.assertEqual(self.p1.vertices(), self.solution1)
-        self.assertRaises(Exception, self.p2.vertices)
-        self.assertRaises(Exception, self.p3.vertices)
+        self.assertEqual(self.p1.vertices, self.solution1)
+        self.assertTrue(self.p2.vertices is None)
+        self.assertTrue(self.p3.vertices is None)
 
     def test_vertices2polygon(self) -> None:
         new_poly = vertices2polygon(self.solution1)
         self.assertEqual(new_poly, self.p1)
 
-        vertices = self.p4.vertices()
+        vertices = self.p4.vertices
+        assert vertices is not None, "Vertices should not be None for p4"
         new_poly = vertices2polygon(vertices)
         self.assertEqual(new_poly, self.p4)
 
@@ -170,9 +171,9 @@ class TestVertices(unittest.TestCase):
             True,
             False,
         ]
-        self.assertEqual(self.p1.convex(), expected_convexity)
+        self.assertEqual(self.p1.convex, expected_convexity)
 
-        convexity = self.p4.convex()
+        convexity = self.p4.convex
         expected_convexity = [
             True,
             True,

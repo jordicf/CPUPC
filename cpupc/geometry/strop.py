@@ -320,7 +320,7 @@ class Strop:
     def _find_best_strop(self) -> None:
         """Finds the best strop included in self, by trying all possible trunks."""
         best_strop: Optional[Strop] = None
-        for trunk in self.reference.maximal_rectangles():
+        for trunk in self.reference.maximal_rectangles:
             strop = Strop(self.reference, trunk)
             if (
                 best_strop is None

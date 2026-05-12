@@ -231,13 +231,15 @@ def RPoly2Box(r: RPolygon) -> XY_Box:
 
 
 class FPolygon:
-    """Class for polygons based on the rportion library.
+    """Class for simple polygons based on the rportion library.
+    Simple polygons are connected and without holes.
     The polygon is represented as a union of rectangles with
     closed-open intervals."""
 
     _polygon: RPolygon  # The polygon represented in rportion
     _area: float  # The area of the polygon
     _vertices: Optional[Vertices]  # The vertices of the polygon (if simple)
+    _is_simple: Optional[bool]  # True if the polygon is simple, False otherwise
     _convex: Optional[
         list[bool]
     ]  # List of booleans indicating if the vertex is convex (True) or concave (False)
@@ -245,6 +247,7 @@ class FPolygon:
     def __init__(self, rectangles: Iterable[XY_Box] = list()):
         self._polygon = RPolygon()
         self._area = -1.0
+        self._is_simple = None
         self._vertices = None
         self._convex = None
         for r in rectangles:
@@ -274,12 +277,10 @@ class FPolygon:
 
     @property
     def is_simple(self) -> bool:
-        """Returns True if the polygon is simple (connected and without holes)."""
-        try:
-            self.vertices()
-            return True
-        except AssertionError:
-            return False
+        """Returns True if the polygon is simple."""
+        if self._is_simple is None:
+            self._is_simple = self.vertices is not None
+        return self._is_simple
 
     def __or__(self, other: FPolygon) -> FPolygon:
         """Returns the union of polygons"""
@@ -309,6 +310,7 @@ class FPolygon:
         """Returns the representation of the polygon"""
         return repr(self.rpolygon)
 
+    @property
     def maximal_rectangles(self) -> Iterator[XY_Box]:
         """Returns an iterator of the maximal rectangles included in the polygon."""
         for r in self.rpolygon.maximal_rectangles():
@@ -320,17 +322,25 @@ class FPolygon:
         in [0,1] defined as Area(P1&P2)/Area(P1|P2)."""
         return (self & other).area / (self | other).area
 
-    def vertices(self) -> Vertices:
+    @property
+    def vertices(self) -> Optional[Vertices]:
         """Converts a polygon into a sequence of vertices.
         The sequence represents de boundaries of the polygon in clockwise order.
         The edges are represented by segments between consecutive vertices.
         The first vertex is the leftmost lowest vertex.
         The polygon must be a simple polygon (connected and without holes).
-        An exception is raised if the polygon is not simple."""
+        None is returned if the polygon is not simple."""
 
         # Check if already computed
-        if self._vertices:
+        if self._is_simple is not None:
             return self._vertices
+
+        # Compute the vertices using the rectangle partitioning of the polygon.
+        # The rectangle partitioning of a simple polygon is a set of rectangles 
+        # that cover the polygon without overlapping. The vertices of the polygon 
+        # are the endpoints of the edges of the rectangles in the partitioning.
+        # The edges of the rectangles are either vertical or horizontal, 
+        # so we can easily determine the adjacent vertices by looking at the edges.
 
         boundary = self._polygon.boundary()
         edges = list(boundary.rectangle_partitioning())
@@ -375,7 +385,11 @@ class FPolygon:
             assert current is not None
             next_vertices = cont[current]
             if len(next_vertices) == 0:
-                assert self._vertices[0] == self._vertices[-1], "Not a simple polygon"
+                # Check if it is a simple polygon
+                if self._vertices[0] != self._vertices[-1]:
+                    self._vertices = None
+                    self._is_simple = False
+                    return None
                 self._vertices.pop()  # Remove the last vertex (equal to the first)
                 break
             new_vertex = next_vertices.pop()
@@ -384,16 +398,20 @@ class FPolygon:
             current = new_vertex
 
         # Check that all points have been visited
-        assert len(self._vertices) == len(cont), "Not a simple polygon"
+        self._is_simple =  len(self._vertices) == len(cont)
+        if not self._is_simple:
+            self._vertices = None
         return self._vertices
 
+    @property
     def convex(self) -> list[bool]:
         """Returns a list of booleans indicating if the vertex is convex (True) or concave (False).
         The list is in the same order as the vertices returned by vertices()."""
         if self._convex:
             return self._convex
 
-        vertices = self.vertices()
+        vertices = self.vertices
+        assert vertices is not None, "Convexity can only be computed for simple polygons"
         n = len(vertices)
         self._convex = [False] * n
         for i in range(n):
