@@ -11,10 +11,11 @@ from cpupc.utils.keywords import KW
 from cpupc.geometry.geometry import Point, Rectangle, Shape
 from cpupc.netlist.netlist import HyperEdge, ModuleClusters
 
-from typing import Any
+from typing import Any, Optional, cast
 
 
-def _add_floorset_nets(netlist: Netlist, die: Die, penalty: float) -> int:
+def _add_floorset_nets(netlist: Netlist, die: Die, boundary_penalty: float,
+                       cluster_penalty: float) -> int:
     """
     Add artificial nets and modules to penalize floorset constraint
     violations (Boundary and Cluster constraints).
@@ -37,8 +38,6 @@ def _add_floorset_nets(netlist: Netlist, die: Die, penalty: float) -> int:
     """
     added_nets: int = 0
 
-    # TODO: clean this mess up
-
     W, H = die.width, die.height
 
     # add modules at each corner
@@ -48,27 +47,33 @@ def _add_floorset_nets(netlist: Netlist, die: Die, penalty: float) -> int:
     BOTTOM_RIGHT: str = Boundary.BOTTOM_RIGHT
 
 
-    kwargs = {KW.FIXED: True, KW.IO_PIN: True}
+    kwargs: dict[KW, Any] = {KW.FIXED: True, KW.IO_PIN: True}
     corner_modules: dict[str, Module] = {}
     
-    kwargs[KW.RECTANGLES] = [Rectangle(**{KW.CENTER: Point(0, H), KW.SHAPE: Shape(w=0, h=0)})]
-    corner_modules[TOP_LEFT] = Module(TOP_LEFT, **kwargs)
+    Rectangle(**cast(dict[str, Any], {
+        KW.CENTER: Point(0, H),
+        KW.SHAPE: Shape(w=0, h=0),
+    }))
+
+    kwargs[KW.RECTANGLES] = [Rectangle(**cast(dict[str, Any], {KW.CENTER: Point(0, H), KW.SHAPE: Shape(w=0, h=0)}))]
+    corner_modules[TOP_LEFT] = Module(TOP_LEFT, **cast(dict[str, Any], kwargs))
     
-    kwargs[KW.RECTANGLES] = [Rectangle(**{KW.CENTER: Point(W, H), KW.SHAPE: Shape(w=0, h=0)})]
-    corner_modules[TOP_RIGHT] = Module(TOP_RIGHT, **kwargs)
+    kwargs[KW.RECTANGLES] = [Rectangle(**cast(dict[str, Any], {KW.CENTER: Point(W, H), KW.SHAPE: Shape(w=0, h=0)}))]
+    corner_modules[TOP_RIGHT] = Module(TOP_RIGHT, **cast(dict[str, Any], kwargs))
 
-    kwargs[KW.RECTANGLES] = [Rectangle(**{KW.CENTER: Point(0, 0), KW.SHAPE: Shape(w=0, h=0)})]
-    corner_modules[BOTTOM_LEFT] = Module(BOTTOM_LEFT, **kwargs)
+    kwargs[KW.RECTANGLES] = [Rectangle(**cast(dict[str, Any], {KW.CENTER: Point(0, 0), KW.SHAPE: Shape(w=0, h=0)}))]
+    corner_modules[BOTTOM_LEFT] = Module(BOTTOM_LEFT, **cast(dict[str, Any], kwargs))
 
-    kwargs[KW.RECTANGLES] = [Rectangle(**{KW.CENTER: Point(W, 0), KW.SHAPE: Shape(w=0, h=0)})]
-    corner_modules[BOTTOM_RIGHT] = Module(BOTTOM_RIGHT, **kwargs)
+    kwargs[KW.RECTANGLES] = [Rectangle(**cast(dict[str, Any], {KW.CENTER: Point(W, 0), KW.SHAPE: Shape(w=0, h=0)}))]
+    corner_modules[BOTTOM_RIGHT] = Module(BOTTOM_RIGHT, **cast(dict[str, Any], kwargs))
 
     for module in corner_modules.values():
         netlist.modules.append(module)
         netlist._name2module[module.name] = module
 
     # fake net weight
-    weight: float = penalty * max(net.weight for net in netlist.edges)
+    boundary_weight: float = boundary_penalty * max(net.weight for net in netlist.edges)
+    cluster_weight: float = cluster_penalty * max(net.weight for net in netlist.edges)
 
     # add nets for each boundary constraint
     for module in netlist.modules:
@@ -108,12 +113,12 @@ def _add_floorset_nets(netlist: Netlist, die: Die, penalty: float) -> int:
             case _:
                 raise Exception(f"Unknown boundary constraint {module.boundary}")
         
-        netlist.edges.append(HyperEdge(new_net, weight))
+        netlist.edges.append(HyperEdge(new_net, boundary_weight))
         added_nets += 1
 
     # add fake nets for each cluster
     for cluster in netlist.adjacency_clusters.get_clusters():
-        netlist.edges.append(HyperEdge(list(cluster), weight))
+        netlist.edges.append(HyperEdge(list(cluster), cluster_weight))
         added_nets += 1
 
     return added_nets
@@ -129,7 +134,7 @@ def _cleanup_floorset_nets(netlist: Netlist, added_nets: int) -> None:
     for _ in range(4):
         netlist.modules.pop()
 
-def _cleanup_mibs(netlist: Netlist) -> None:
+def _cleanup_mibs(netlist: Netlist) -> Netlist:
     """
     Detects MIB clusters with at least one hard module,
     and sets all soft modules in that MIB to hard and
@@ -165,7 +170,7 @@ def _cleanup_mibs(netlist: Netlist) -> None:
 def _run_contract_expand(
     netlist: Netlist,
     die: Die,
-    hyperparams: dict,
+    hyperparams: dict[str, Any],
 ) -> Netlist:
     """
     Runs the whole contraction - expansion algorithm
@@ -176,7 +181,9 @@ def _run_contract_expand(
         hyperparams: hyperparameters dictionary
     """
     # add fake nets to enforce floorset constraints
-    added_nets: int = _add_floorset_nets(netlist, die, hyperparams.get('penalty', 10))
+    boundary_penalty: float = hyperparams.get('boundary_penalty', 1000)
+    cluster_penalty: float = hyperparams.get('cluster_penalty', 5)
+    added_nets: int = _add_floorset_nets(netlist, die, boundary_penalty, cluster_penalty)
     
     H: float = die.height
     W: float = die.width
@@ -190,7 +197,7 @@ def _run_contract_expand(
         print(f"Starting big iteration {iter}")
         
 
-        contract(netlist, hyperparams=hyperparams)
+        contract(netlist, hyperparams=hyperparams, die=die)
         expand(netlist, H, W, hyperparams)
 
         # stopping condition
@@ -211,12 +218,13 @@ def _run_contract_expand(
         iter += 1
 
     _cleanup_floorset_nets(best_netlist, added_nets)
-
-    return best_netlist
+    _cleanup_floorset_nets(netlist, added_nets)
+    # return best_netlist
+    return netlist
 
 
 def parse_options(
-    prog: str | None = None, args: list[str] | None = None
+    prog: Optional[str] = None, args: Optional[list[str]] = None
 ) -> dict[str, Any]:
     """
     Parse the command-line arguments for the tool
@@ -279,7 +287,7 @@ def parse_options(
 
 
 def main(prog: str | None = None, args: list[str] | None = None) -> None:
-    options: dict[str, str] = parse_options(prog, args)
+    options: dict[str, Any] = parse_options(prog, args)
 
     netlist_path: str = options["netlist"]
     die_path: str = options["die"]
@@ -298,7 +306,7 @@ def main(prog: str | None = None, args: list[str] | None = None) -> None:
         raise ValueError(f"Invalid output file type {out_path}, must be json or yaml")
 
     netlist: Netlist = Netlist(netlist_path)
-    netlist = _cleanup_mibs(netlist)
+    netlist = _cleanup_mibs(netlist) # netlist preprocessing
     die: Die = Die(die_path)
 
     hyperparams = {
@@ -336,7 +344,7 @@ def main(prog: str | None = None, args: list[str] | None = None) -> None:
     # Check that centers are initialized
     for m in netlist.modules:
         if m.center is None:
-             raise ValueError(f"Module {m.name} has no center initialized. Use 'grdraw' or 'force' first.")
+             raise ValueError(f"Module {m.name} has no center initialized. E.g, use 'qp', 'grdraw' or 'force' first.")
 
     netlist = _run_contract_expand(
         netlist=netlist,

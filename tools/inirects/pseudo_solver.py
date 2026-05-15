@@ -1,10 +1,13 @@
 import concurrent.futures
 import numpy as np
+from numpy.typing import NDArray
+from numpy import float64
+from typing import Any
 
 
 def _possible_overlap(S1: float, S2: float, c1: float, c2: float, 
-                     a1max: float = 2, a1min: float = 0.5,
-                     a2max: float = 2, a2min: float = 0.5) -> bool:
+                      a1max: float = 2, a1min: float = 0.5,
+                      a2max: float = 2, a2min: float = 0.5) -> bool:
     """
     Returns whether R1, a rectangle of area "S1" with lower-left vertex at (0, 0), 
     and R2, a rectangle with upper right vertex at (c1, c2) > (0, 0) of area "S2", 
@@ -56,9 +59,8 @@ def _possible_overlap(S1: float, S2: float, c1: float, c2: float,
     else: # there is some overlap
         return h(max(xmin1, xmin2)) > 0 or h(min(xmax1, xmax2)) > 0
 
-def _pairwise_overlap(h: np.ndarray, w: np.ndarray, 
-                      centers: np.ndarray,
-                      i: int, j: int) -> float:
+def _pairwise_overlap(h: NDArray[float64], w: NDArray[float64], 
+                      centers: NDArray, i: int, j: int) -> float:
     """
     Returns overlap between rectangles "i" and "j"
 
@@ -79,30 +81,25 @@ def _pairwise_overlap(h: np.ndarray, w: np.ndarray,
     
     return h_overlap * v_overlap
 
-def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray, 
-                               centers: np.ndarray, mib: list[int],
-                               ar_max: float, ar_min: float,
-                               ) -> float:
+def _pseudo_partial_derivative(
+    h: NDArray[float64], w: NDArray[float64], centers: NDArray, 
+    mib: list[int], ar_max: float, ar_min: float,
+) -> float:
     """          
-    Given a layout and a set of rectangles 'mib', it finds the width of
-    the rectangles in 'mib' that minimizes the total overlap of the layout.
-    The height of the rectangles in 'mib' is scaled to mantain a constant area.
+    Given a set of rectangles 'mib', it finds the width of that minimizes total
+    overlap of the layout. The height of the rectangles is scaled to mantain a 
+    constant area. 
     All the other rectangle widths (& heights) are not modified,
-    so this computation is somewhat similar to a partial derivative.
     All rectangle centers remain unchanged.
 
-    The found value is not guaranteed to be the optimum. It is found
-    by sampling the range of possible w_i values, evaluating
-    the overlap function on each sample, and then exploring
-    the neighborhood of the best sample. This is repeated until
-    there is no improvement.
+    The found value is not guaranteed to be the optimum as it is obtained
+    by sampling
 
     Params:
-        h, w: list of heights and widths of every rectangle. Since areas
-              are constant, given one variable you have the other.
+        h, w: list of heights and widths of every rectangle in the layout.
         centers: list of (x,y) coordinates of the center of every rectangle
-        mib: list of indices of the rectangles w.r.t the pseudo partial derivative is 
-           calculated.
+        mib: list of indices of the rectangles w.r.t the pseudo partial 
+             derivative is calculated.
         ar_max, ar_min: aspect ratio bounds for the rectangles in mib
 
     Returns:
@@ -123,7 +120,7 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
 
     for i in mib:
         xi, yi = centers[i][0], centers[i][1]
-        Ai = area
+        Ai: float = area
         wi, hi = width, height
 
         for j in range(N):
@@ -149,10 +146,8 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
                     # hi and wi, leaving hj, wj fixed, then add "j" to the set
                     overlap_candidates.add((i, j))
 
-    # define objective function: sum_{(i,j) in overlap_candidates} overlap(i,j)
-    # Note that this is equivalent to minimizing sum_{i,j in {1,...,N}} overlap(i,j)
-    def overlap(h: list[float], w: list[float], 
-                centers: list[tuple[float, float]],
+    # objective function: sum_{(i,j) in overlap_candidates} overlap(i,j)
+    def overlap(h: NDArray[float64], w: NDArray[float64], centers: NDArray,
                 overlap_candidates: set[tuple[int, int]]) -> float:
         return sum(_pairwise_overlap(h, w, centers, i, j) for i,j in overlap_candidates)
     
@@ -173,7 +168,7 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
 
             overlaps.append(overlap(h, w, centers, overlap_candidates))
 
-        j_best: int = np.argmin(overlaps)
+        j_best: int = int(np.argmin(overlaps))
 
         if overlaps[j_best] < min_overlap:
             min_overlap = overlaps[j_best]
@@ -191,11 +186,12 @@ def _pseudo_partial_derivative(h: np.ndarray, w: np.ndarray,
     
     return best_w
 
-def _pseudo_gradient_serial(h: np.ndarray, w: np.ndarray, 
-                            centers: np.ndarray, min_AR: list[float], 
-                            max_AR: list[float], mib_clusters: list[list[int]]):
+def _pseudo_gradient_serial(h: NDArray[float64], w: NDArray[float64], 
+                            centers: NDArray, min_AR: NDArray[float64], 
+                            max_AR: NDArray[float64], mib_clusters: list[list[int]]
+                            ) -> NDArray[float64]:
     """
-    Compute 'gradient' using a plain Python loop
+    Compute pseudo gradient using a plain Python loop
 
     Params:
         h, w: list of heights, widths
@@ -206,15 +202,14 @@ def _pseudo_gradient_serial(h: np.ndarray, w: np.ndarray,
                       singleton list
     
     """
-    N = len(w)
-    results = [
+    results: list[float] = [
         _pseudo_partial_derivative(
             h, w, centers, mib_clusters[i],
             ar_max=max_AR[mib_clusters[i][0]], ar_min=min_AR[mib_clusters[i][0]]
         ) for i in range(len(mib_clusters))
     ]
 
-    pseudo_gradient = w.copy()
+    pseudo_gradient: NDArray[float64] = w.copy()
     for i, cluster in enumerate(mib_clusters):
         pseudo_gradient[cluster] = results[i]
     return pseudo_gradient
@@ -229,9 +224,9 @@ def _parallel_worker(args) -> float:
     )
 
 def _pseudo_gradient_parallel(
-        h: np.ndarray, w: np.ndarray, centers: np.ndarray, 
-        min_AR: np.ndarray, max_AR: np.ndarray, 
-        mib_clusters: list[list[int]], max_workers=4) -> np.ndarray:
+    h: NDArray[float64], w: NDArray[float64], centers: NDArray, 
+    min_AR: NDArray[float64], max_AR: NDArray[float64], 
+    mib_clusters: list[list[int]], max_workers=4) -> NDArray:
     """
     Parallel version of _pseudo_gradient_serial(). Slower
     for small netlist sizes.
@@ -245,23 +240,26 @@ def _pseudo_gradient_parallel(
                       same shape.
         max_workers: number of processes (defaults to os.cpu_count()).
     """
-    N: int = len(centers)
-    tasks = [(h, w, centers, mib_clusters[i], min_AR[mib_clusters[i][0]], max_AR[mib_clusters[i][0]]) \
-             for i in range(len(mib_clusters))]
+    tasks = [
+        (h, w, centers, mib_clusters[i], min_AR[mib_clusters[i][0]], max_AR[mib_clusters[i][0]]) \
+        for i in range(len(mib_clusters))
+    ]
+
     with concurrent.futures.ProcessPoolExecutor(max_workers=max_workers) as executor:
         results = list(executor.map(_parallel_worker, tasks))
     
-    pseudo_gradient = w.copy()
+    pseudo_gradient: NDArray[float64] = w.copy()
     for i, cluster in enumerate(mib_clusters):
         pseudo_gradient[cluster] = results[i]
 
     return pseudo_gradient
 
-def solve_widths(centers: np.ndarray, h: np.ndarray, 
-                 w: np.ndarray, areas: np.ndarray, min_AR: list[float], 
-                 max_AR: list[float], mib_clusters: list[list[int]] ,
-                 hyperparams: dict = {},
-                ) -> tuple[np.ndarray, np.ndarray]:
+def solve_widths(centers: NDArray, h: NDArray[float64], 
+                 w: NDArray[float64], areas: NDArray[float64], 
+                 min_AR: NDArray[float64], max_AR: NDArray[float64], 
+                 mib_clusters: list[list[int]],
+                 hyperparams: dict[str, Any] = {},
+                ) -> tuple[NDArray, NDArray]:
     """
     Returns widths and heights for each rectangle to minimize overlap, 
     given their areas, centers and aspect ratio bounds.
@@ -285,18 +283,18 @@ def solve_widths(centers: np.ndarray, h: np.ndarray,
         (h, w), where w is a list of widths and h a list of heights
     """
 
-    hyperparams: dict = hyperparams.get('pseudo_solver', {})
-    epsilon: float = hyperparams.get('epsilon', 1e-5) # sensitivity to change hyperparameter
+    local_hyperparams: dict[str, Any] = hyperparams.get('pseudo_solver', {})
+    epsilon: float = local_hyperparams.get('epsilon', 1e-5) # sensitivity to change hyperparameter
 
-    lr: float = hyperparams.get('lr', 1) # learning rate
-    lr_decay: float = hyperparams.get('lr_decay', 0.95) # to avoid oscillation
-    parallel: bool = hyperparams.get('parallel', True)
+    lr: float = local_hyperparams.get('lr', 1) # learning rate
+    lr_decay: float = local_hyperparams.get('lr_decay', 0.95) # to avoid oscillation
+    parallel: bool = local_hyperparams.get('parallel', True)
     pseudo_gradient = _pseudo_gradient_parallel if parallel else _pseudo_gradient_serial
 
-    delta_w: np.ndarray = pseudo_gradient(h, w, centers, min_AR, 
+    delta_w: NDArray = pseudo_gradient(h, w, centers, min_AR, 
                                           max_AR, mib_clusters) - w
     
-    w_new: np.ndarray = w + lr * delta_w
+    w_new: NDArray = w + lr * delta_w
 
     similarity: float = abs(np.dot(w_new, w)) / \
             (np.linalg.norm(w_new) * np.linalg.norm(w)) # cosine distance

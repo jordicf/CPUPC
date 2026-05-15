@@ -93,12 +93,12 @@ def parse_options(
 
 def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
     """Main function."""
-    options = parse_options(prog, args)
-    netlist = swapNetlist(options["netlist"], options["split_net"], 
-                          options["split_threshold"], options["star"], 
-                          options["verbose"])
+    options: dict[str, Any] = parse_options(prog, args)
+    swp_netlist = swapNetlist(options["netlist"], options["split_net"], 
+                              options["split_threshold"], options["star"], 
+                              options["verbose"])
     simulated_annealing(
-        netlist,
+        swp_netlist,
         n_swaps=options["swaps"],
         patience=options["patience"],
         target_acceptance=options["accept"],
@@ -108,25 +108,25 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
     )
 
     if options["greedy"]:
-        greedy(netlist, verbose=options["verbose"])
+        greedy(swp_netlist, verbose=options["verbose"])
 
-    netlist.remove_subblocks()  # Remnove fake subblocks from splits
+    swp_netlist.remove_subblocks()  # Remove fake subblocks from splits
     # Update the original netlist with the new positions
-    netlist.netlist.update_centers(
-        {netlist.idx2name(i): (p.x, p.y) for i, p in enumerate(netlist.points)}
+    swp_netlist.netlist.update_centers(
+        {swp_netlist.idx2name(i): (p.x, p.y) for i, p in enumerate(swp_netlist.points)}
     )
-    netlist.hpwl = sum(netlist._compute_net_hpwl(n) for n in netlist.nets)
+    swp_netlist.hpwl = sum(swp_netlist._compute_net_hpwl(n) for n in swp_netlist.nets)
     if options["verbose"]:
-        print(f"Final HPWL: {netlist.hpwl:.2f}")
+        print(f"Final HPWL: {swp_netlist.hpwl:.2f}")
 
     # Check the type of file by suffix
-    outfile = options["outfile"]
-    suffix = pathlib.Path(outfile).suffix
+    outfile: str = options["outfile"]
+    suffix: str = pathlib.Path(outfile).suffix
 
     if suffix == ".json":
-        netlist.netlist.write_json(outfile)
+        swp_netlist.netlist.write_json(outfile)
     elif suffix in [".yaml", ".yml"]:
-        netlist.netlist.write_yaml(options["outfile"])
+        swp_netlist.netlist.write_yaml(options["outfile"])
     else:
         raise NameError(f"Unknown suffix for {outfile}: .json, .yaml or .yml expected")
 

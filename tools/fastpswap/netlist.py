@@ -112,10 +112,11 @@ class swapNetlist:
             area = sum(r.area for r in m.rectangles)
             self.points.append(swapPoint(x=m.center.x, y=m.center.y, parent=idx))
             self._areas.append(area)
-            if not m.is_hard:
-                assert (
-                    len(m.rectangles) == 1
-                ), "Only one rectangle per soft module is supported"
+            if not m.is_fixed:
+                if not m.is_hard:
+                    assert (
+                        len(m.rectangles) == 1
+                    ), "Only one rectangle per soft module is supported"
                 self._movable.append(idx)
                 movable_area += area
 
@@ -213,7 +214,9 @@ class swapNetlist:
             if m.area() <= target_area:
                 continue
 
-            assert not m.is_hard, "Only soft modules can be split"
+            if m.is_hard:
+                continue # only soft modules can be split
+            
             assert (
                 len(m.rectangles) == 1
             ), "Only one rectangle per soft module is supported"

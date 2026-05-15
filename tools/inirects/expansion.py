@@ -1,14 +1,17 @@
 import numpy as np
-from .repel_rectangles import repel_rectangles
-from .pseudo_solver import solve_widths
+from tools.inirects.repel_rectangles import repel_rectangles
+from tools.inirects.pseudo_solver import solve_widths
 from cpupc.netlist.netlist import Netlist
-from cpupc.geometry.geometry import Shape, Rectangle
+from cpupc.geometry.geometry import Shape, Rectangle, AspectRatio
 from collections import defaultdict
+from numpy.typing import NDArray
+from numpy import float64
+from typing import Any
 
 # weighted center of mass aproach
 
-def set_heights_widths(netlist: Netlist, h: np.ndarray, w: np.ndarray,
-                       original_idx: list[int]) -> None:
+def set_heights_widths(netlist: Netlist, h: NDArray[float64], 
+                       w: NDArray[float64], original_idx: list[int]) -> None:
     N: int = len(h)
 
     for i in range(N):
@@ -23,7 +26,7 @@ def set_heights_widths(netlist: Netlist, h: np.ndarray, w: np.ndarray,
                           fixed=module.is_fixed, hard=module.is_hard)
             ]
 
-def set_centers(netlist: Netlist, centers: np.ndarray,
+def set_centers(netlist: Netlist, centers: NDArray,
                 original_idx: list[int]) -> None:
     mod_centers = {}
     N: int = len(centers)
@@ -34,9 +37,9 @@ def set_centers(netlist: Netlist, centers: np.ndarray,
     
     netlist.update_centers(mod_centers)
 
-def pairwise_overlap(centers: np.ndarray,
-                      h: np.ndarray, w: np.ndarray,
-                      i: int, j: int) -> float:
+def pairwise_overlap(centers: NDArray, 
+                     h: NDArray[float64], w: NDArray[float64],
+                     i: int, j: int) -> float:
     """
     Returns overlap between rectangles "i" and "j"
     """
@@ -49,8 +52,7 @@ def pairwise_overlap(centers: np.ndarray,
     
     return h_overlap * v_overlap
 
-def total_overlap(centers: np.ndarray,
-                  h: np.ndarray, w: np.ndarray) -> float:
+def total_overlap(centers: NDArray, h: NDArray, w: NDArray) -> float:
     """
     Calculates total overlap between all pairs of rectangles
     """
@@ -64,9 +66,9 @@ def total_overlap(centers: np.ndarray,
 
     return accum_overlap
 
-def ar_bounds(centers: np.ndarray, areas: np.ndarray, 
-               ar_min: list[float], ar_max: list[float], H: float, 
-               W: float) -> tuple[np.ndarray, np.ndarray]:
+def ar_bounds(centers: NDArray, areas: NDArray[float64], 
+               ar_min: NDArray[float64], ar_max: NDArray[float64], 
+               H: float, W: float) -> tuple[NDArray, NDArray]:
     """
     Finds the minimum and maximum aspect ratio each rectangle can
     have, given its center, so as not to exceed the die bound.
@@ -107,7 +109,7 @@ def ar_bounds(centers: np.ndarray, areas: np.ndarray,
     return np.array(min_AR), np.array(max_AR)
 
 def expand(netlist: Netlist, H: float, W: float,
-           hyperparams: dict = {}) -> None:
+           hyperparams: dict[str, Any] = {}) -> None:
     """
     Expands the rectangles in the netlist to reduce overlap, and
     reshapes them. Pins are ignored in this stage.
@@ -115,16 +117,14 @@ def expand(netlist: Netlist, H: float, W: float,
     hyperparams = hyperparams.get('expansion', {})
     
     # extract data from netlist to arrays for speed
-    # modules are given indices 0, 1, ... N-1 in the same order as the netlist,
-    # but skipping the pins
-    centers = []
-    heights = []
-    widths = []
-    areas = []
-    ar_min = []
-    ar_max = []
-    original_idx = [] # maps 0..N-1 to original module indices
-    fixed = set()
+    center_list: list[NDArray[float64]] = []
+    height_list: list[float] = []
+    width_list: list[float] = []
+    area_list: list[float] = []
+    ar_min_list: list[float] = []
+    ar_max_list: list[float] = []
+    original_idx: list[int] = [] # maps 0..N-1 to original module indices
+    fixed = set[int]()
     # maps MIB name to list of module indices, ONLY for soft modules
     # soft modules not in an MIB are given their own exclusive MIB
     mib_dict: dict[str, list[int]] = defaultdict(list)
@@ -134,42 +134,43 @@ def expand(netlist: Netlist, H: float, W: float,
             continue
         
         r = m.rectangles[0]
-        centers.append(np.array([r.center.x, r.center.y]))
-        heights.append(r.shape.h)
-        widths.append(r.shape.w)
-        areas.append(m.area())
+        center_list.append(np.array([r.center.x, r.center.y]))
+        height_list.append(r.shape.h)
+        width_list.append(r.shape.w)
+        area_list.append(m.area())
         
-        min_ar = 1 / 3 # default values
-        max_ar = 3
+        min_ar: float = 1 / 3 # default values
+        max_ar: float = 3.0
         if m.aspect_ratio:
             min_ar = m.aspect_ratio.min_wh
             max_ar = m.aspect_ratio.max_wh
-        ar_min.append(min_ar)
-        ar_max.append(max_ar)
+        else:
+            m.aspect_ratio = AspectRatio(min_wh=1/3, max_wh=3)
+
+        ar_min_list.append(min_ar)
+        ar_max_list.append(max_ar)
 
         original_idx.append(i)
 
         if m.is_fixed:
-            fixed.add(len(centers) - 1)
+            fixed.add(len(center_list) - 1)
         
         if m.mib and not m.is_hard:
-            mib_dict[m.mib].append(len(centers) - 1)
+            mib_dict[m.mib].append(len(center_list) - 1)
 
         elif not m.is_hard: 
             # soft modules not in an MIB are given their own exclusive MIB
             assert m.name not in mib_dict
-            mib_dict[m.name].append(len(centers) - 1)
+            mib_dict[m.name].append(len(center_list) - 1)
 
-    centers = np.array(centers)
-    heights = np.array(heights)
-    widths = np.array(widths)
-    areas = np.array(areas)
-    ar_min = np.array(ar_min)
-    ar_max = np.array(ar_max)
+    centers: NDArray = np.array(center_list)
+    heights: NDArray[float64] = np.array(height_list)
+    widths: NDArray[float64] = np.array(width_list)
+    areas: NDArray[float64] = np.array(area_list)
+    ar_min: NDArray[float64] = np.array(ar_min_list)
+    ar_max: NDArray[float64] = np.array(ar_max_list)
     # partition of soft module indices in [0..N-1] into MIB's
-    # i.e union(mib_clusters[i]) = {j | j is neither fixed nor hard}
     mib_clusters: list[list[int]] = list(mib_dict.values())
-
 
     epsilon: float = hyperparams.get('epsilon', 1e-5) * H * W
 
@@ -179,16 +180,15 @@ def expand(netlist: Netlist, H: float, W: float,
         old_centers, old_h, old_w = centers, heights, widths
         prev_overlap = overlap
 
-        centers: np.ndarray = repel_rectangles(centers, heights, 
-                                               widths, H, W, fixed, 
-                                               hyperparams)
+        centers = repel_rectangles(centers, heights, widths, 
+                                   H, W, fixed, hyperparams)
 
         min_AR, max_AR = ar_bounds(centers, areas, ar_min, ar_max, H, W)
 
         heights, widths = solve_widths(centers, heights, widths, areas, min_AR,
                                        max_AR, mib_clusters, hyperparams)
 
-        overlap: float = total_overlap(centers, heights, widths)
+        overlap = total_overlap(centers, heights, widths)
 
         if overlap > prev_overlap - epsilon:
             break
