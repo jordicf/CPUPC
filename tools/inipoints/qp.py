@@ -27,10 +27,10 @@ except ImportError:
 
 class Module:
     """Represents a cell or io_pin"""
-    def __init__(self, name: str, area: float = 0, aspect_ratio: List[float] = None,
+    def __init__(self, name: str, area: float = 0, aspect_ratio: List[float] = list(),
                  center: List[float] = None, io_pin: bool = False, fixed: bool = False,
-                 hard: bool = False, rectangles: List[List[float]] = None, 
-                 original_attrs: dict = None):
+                 hard: bool = False, rectangles: List[List[float]] = list(), 
+                 original_attrs: dict = dict()):
         self.name = name
         self.area = area
         self.aspect_ratio = aspect_ratio or [1.0, 1.0]

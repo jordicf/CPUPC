@@ -101,7 +101,8 @@ def write_netlist(
             continue
         i = mod2idx[m.name]
         assert m.num_rectangles > 0, f"Module {m.name} has no rectangles"
-        vertices = m.polygon().vertices()
+        vertices = m.polygon().vertices
+        assert vertices is not None, f"Module {m.name} has no vertices (not a simple polygon)"
         all_vertices.extend(vertices)
         vertices.append(vertices[0])  # close the polygon
         sol[i] = torch.tensor(vertices, dtype=torch.float32)

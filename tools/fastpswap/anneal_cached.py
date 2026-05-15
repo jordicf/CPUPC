@@ -15,7 +15,6 @@ from cpupc.netlist.module import Module, Boundary
 from cpupc.die.die import Die
 
 
-
 def simulated_annealing(
     netlist: swapNetlist,
     n_swaps: int = 100,
@@ -47,7 +46,7 @@ def simulated_annealing(
     for p in netlist.points:
         p_nets_indices.extend(p.nets)
         p_nets_offsets.append(len(p_nets_indices))
-    
+
     point_nets_indices = np.array(p_nets_indices, dtype=np.int32)
     point_nets_offsets = np.array(p_nets_offsets, dtype=np.int32)
 
@@ -115,9 +114,7 @@ def simulated_annealing(
 
     # initialize array of net hpwl
     _compute_netlist_hpwl(
-        point_x, point_y,
-        net_weights, net_hpwls,
-        net_points_indices, net_points_offsets
+        point_x, point_y, net_weights, net_hpwls, net_points_indices, net_points_offsets
     )
 
     # Precompute constraints for each point
@@ -167,7 +164,7 @@ def simulated_annealing(
         seed,
         verbose,
     )
-            
+
     # Recover the optimized positions
     central_idxs: NDArray[np.int32] = sa_movable[sa_movable < (n_points - netlist._num_subblocks)]
     n_orig_movable = len(central_idxs)  # number of original movable modules
@@ -176,7 +173,9 @@ def simulated_annealing(
     }  # maps central module id => position in central_idx
 
     final_positions = np.zeros((n_orig_movable, 2), dtype=np.float64)
-    submodule_count = np.zeros(n_orig_movable, dtype=np.uint32) # num of submodules for each movable module
+    submodule_count = np.zeros(
+        n_orig_movable, dtype=np.uint32
+    )  # num of submodules for each movable module
 
     for i in range(len(sa_movable)):
         parent: int = netlist.points[sa_movable[i]].parent  # central module id of submodule i
@@ -191,7 +190,7 @@ def simulated_annealing(
     assert np.min(submodule_count) > 0
 
     final_positions /= submodule_count[:, None]
-    
+
     for i in range(n_orig_movable):
         module = netlist.idx2module(central_idxs[i])
         min_x = module.rectangles[0].shape.w / 2
@@ -229,8 +228,8 @@ def jit_simulated_annealing(
     verbose: bool,
 ) -> None:
     """Optimize the netlist using simulated annealing.
-    (point_x, point_y, point_nets_indices, point_nets_offsets, net_weights, 
-    net_hpwls, net_points_indices, net_points_offsets, movable) all represent 
+    (point_x, point_y, point_nets_indices, point_nets_offsets, net_weights,
+    net_hpwls, net_points_indices, net_points_offsets, movable) all represent
     the netlist to optimize
 
     target_acceptance is the desired initial acceptance ratio (value in (0,0.95]),
@@ -252,9 +251,9 @@ def jit_simulated_annealing(
         print("Initial HPWL:", total_hpwl)
 
     net_prev_hpwls = net_hpwls.copy()
-    
+
     n_swaps = n_swaps * len(movable)
-    
+
     # Compute the initial temperature
     temp: float = _find_best_temperature(
         n_swaps,
@@ -286,10 +285,10 @@ def jit_simulated_annealing(
     if verbose:
         print("Initially: Temperature", temp, "HPWL", best_hpwl)
 
-    no_improvement = 0 # Number of iteration without improvement
-    iter_count = 0 # Iteration counter
-    best_avg = math.inf # Conservative best average HPWL in one iteration
-    
+    no_improvement = 0  # Number of iteration without improvement
+    iter_count = 0  # Iteration counter
+    best_avg = math.inf  # Conservative best average HPWL in one iteration
+
     while no_improvement < patience:
         iter_count += 1
         avg = 0.0
@@ -307,11 +306,19 @@ def jit_simulated_annealing(
                 continue
 
             delta_hpwl, delta_hpwl_internal = _swap_points(
-                idx1, idx2,
-                point_x, point_y, point_nets_indices, point_nets_offsets,
-                net_weights, net_hpwls, net_prev_hpwls, external_nets, 
-                net_points_indices, net_points_offsets
-            )      
+                idx1,
+                idx2,
+                point_x,
+                point_y,
+                point_nets_indices,
+                point_nets_offsets,
+                net_weights,
+                net_hpwls,
+                net_prev_hpwls,
+                external_nets,
+                net_points_indices,
+                net_points_offsets,
+            )
 
             if delta_hpwl < 0 or np.random.random() < np.exp(-delta_hpwl / temp):
                 current_hpwl += delta_hpwl
@@ -326,13 +333,18 @@ def jit_simulated_annealing(
             else:
                 # Swap back
                 _undo_swap(
-                    idx1, idx2, point_x, point_y, 
-                    point_nets_indices, point_nets_offsets, 
-                    net_hpwls, net_prev_hpwls
+                    idx1,
+                    idx2,
+                    point_x,
+                    point_y,
+                    point_nets_indices,
+                    point_nets_offsets,
+                    net_hpwls,
+                    net_prev_hpwls,
                 )
-                
+
             avg += current_hpwl
-        
+
         current_dispersion = _compute_internal_unweighted_hpwl(
             external_nets, point_x, point_y, net_points_indices, net_points_offsets
         )
@@ -349,14 +361,19 @@ def jit_simulated_annealing(
             no_improvement = 0
             best_avg = avg
             best_dispersion = current_dispersion
-            
+
         if verbose:
             print(
-                "Iter.", iter_count,
-                "Temp.", temp,
-                "HPWL: Avg", avg,
-                "Best Avg", best_avg,
-                "Best", best_hpwl,
+                "Iter.",
+                iter_count,
+                "Temp.",
+                temp,
+                "HPWL: Avg",
+                avg,
+                "Best Avg",
+                best_avg,
+                "Best",
+                best_hpwl,
             )
         # decrease temperature and increase internal net weights
         temp = temp * temp_factor
@@ -400,11 +417,11 @@ def _find_best_temperature(
     nswaps is the number of swaps performed to generate cost samples,
     target_acceptance is the desired acceptance ratio (value in (0,0.95])."""
     assert 0 < target_acceptance <= 0.95, "Target acceptance must be in (0, 0.95]"
-    
-    cost: list[float] = [] # incremental costs from the original location
-    
+
+    cost: list[float] = []  # incremental costs from the original location
+
     net_prev_hpwls = np.empty_like(net_hpwls)
-    
+
     for _ in range(nswaps):
         idx1, idx2 = _pick_feasible_swap(
             movable,
@@ -418,24 +435,37 @@ def _find_best_temperature(
             continue
 
         delta, _ = _swap_points(
-            idx1, idx2,
-            point_x, point_y, point_nets_indices, point_nets_offsets,
-            net_weights, net_hpwls, net_prev_hpwls, external_nets, 
-            net_points_indices, net_points_offsets
+            idx1,
+            idx2,
+            point_x,
+            point_y,
+            point_nets_indices,
+            point_nets_offsets,
+            net_weights,
+            net_hpwls,
+            net_prev_hpwls,
+            external_nets,
+            net_points_indices,
+            net_points_offsets,
         )
         cost.append(abs(delta))
-        
+
         # Return to the original location
         _undo_swap(
-            idx1, idx2, point_x, point_y,
-            point_nets_indices, point_nets_offsets,
-            net_hpwls, net_prev_hpwls
+            idx1,
+            idx2,
+            point_x,
+            point_y,
+            point_nets_indices,
+            point_nets_offsets,
+            net_hpwls,
+            net_prev_hpwls,
         )
 
     # Compute target temperature
     nonzero_cost = [c for c in cost if c > 0]
     if not nonzero_cost:
-        raise ValueError("No valid cost samples found") # should never happen   
+        raise ValueError("No valid cost samples found")  # should never happen
     nonzero_cost.sort()
     idx = min(int(len(nonzero_cost) * target_acceptance), len(nonzero_cost) - 1)
     return -nonzero_cost[idx] / math.log(target_acceptance)
@@ -454,9 +484,10 @@ def _compute_net_hpwl(
     It returns the computed HPWL."""
 
     start = net_points_offsets[net_idx]
-    end = net_points_offsets[net_idx+1]
-    
-    if start == end: return 0.0
+    end = net_points_offsets[net_idx + 1]
+
+    if start == end:
+        return 0.0
 
     p0 = net_points_indices[start]
     min_x = max_x = px[p0]
@@ -466,11 +497,15 @@ def _compute_net_hpwl(
         p = net_points_indices[i]
         nx = px[p]
         ny = py[p]
-        if nx < min_x: min_x = nx
-        if nx > max_x: max_x = nx
-        if ny < min_y: min_y = ny
-        if ny > max_y: max_y = ny
-        
+        if nx < min_x:
+            min_x = nx
+        if nx > max_x:
+            max_x = nx
+        if ny < min_y:
+            min_y = ny
+        if ny > max_y:
+            max_y = ny
+
     return (max_x - min_x + max_y - min_y) * net_weights[net_idx]
 
 
@@ -480,7 +515,7 @@ def _compute_internal_unweighted_hpwl(
     px: np.ndarray,
     py: np.ndarray,
     net_points_indices: np.ndarray,
-    net_points_offsets: np.ndarray
+    net_points_offsets: np.ndarray,
 ) -> float:
     """Compute the half-perimeter wire length (HPWL) of all internal nets
     ignoring weights."""
@@ -488,11 +523,12 @@ def _compute_internal_unweighted_hpwl(
     total_hpwl: float = 0.0
     n_nets: int = len(net_points_offsets) - 1
 
-    for net_idx in range(external_nets, n_nets):        
+    for net_idx in range(external_nets, n_nets):
         start = net_points_offsets[net_idx]
-        end = net_points_offsets[net_idx+1]
-        
-        if start >= end: continue
+        end = net_points_offsets[net_idx + 1]
+
+        if start >= end:
+            continue
 
         p0 = net_points_indices[start]
         min_x = max_x = px[p0]
@@ -502,11 +538,15 @@ def _compute_internal_unweighted_hpwl(
             p = net_points_indices[i]
             nx = px[p]
             ny = py[p]
-            if nx < min_x: min_x = nx
-            if nx > max_x: max_x = nx
-            if ny < min_y: min_y = ny
-            if ny > max_y: max_y = ny
-        
+            if nx < min_x:
+                min_x = nx
+            if nx > max_x:
+                max_x = nx
+            if ny < min_y:
+                min_y = ny
+            if ny > max_y:
+                max_y = ny
+
         total_hpwl += (max_x - min_x) + (max_y - min_y)
 
     return total_hpwl
@@ -519,12 +559,13 @@ def _compute_netlist_hpwl(
     net_weights: np.ndarray,
     net_hpwls: np.ndarray,
     net_points_indices: np.ndarray,
-    net_points_offsets: np.ndarray
+    net_points_offsets: np.ndarray,
 ) -> None:
     for n in range(len(net_hpwls)):
-        net_hpwls[n] = _compute_net_hpwl(n, point_x, point_y, 
-                                         net_points_indices, net_points_offsets, 
-                                         net_weights)
+        net_hpwls[n] = _compute_net_hpwl(
+            n, point_x, point_y, net_points_indices, net_points_offsets, net_weights
+        )
+
 
 @njit(cache=True)
 def _merge_remove_common(list1: np.ndarray, list2: np.ndarray) -> np.ndarray:
@@ -548,7 +589,7 @@ def _merge_remove_common(list1: np.ndarray, list2: np.ndarray) -> np.ndarray:
         merged.append(list2[j])
         j += 1
     return np.array(merged, dtype=np.int32)
-    
+
 
 @njit(cache=True)
 def _swap_points(
@@ -571,12 +612,12 @@ def _swap_points(
     # swap coordinates
     point_x[idx1], point_x[idx2] = point_x[idx2], point_x[idx1]
     point_y[idx1], point_y[idx2] = point_y[idx2], point_y[idx1]
-    
+
     # Find affected nets
-    s1, e1 = point_nets_offsets[idx1], point_nets_offsets[idx1+1]
+    s1, e1 = point_nets_offsets[idx1], point_nets_offsets[idx1 + 1]
     nets1 = point_nets_indices[s1:e1]
 
-    s2, e2 = point_nets_offsets[idx2], point_nets_offsets[idx2+1]
+    s2, e2 = point_nets_offsets[idx2], point_nets_offsets[idx2 + 1]
     nets2 = point_nets_indices[s2:e2]
 
     affected_nets = _merge_remove_common(nets1, nets2)
@@ -588,14 +629,17 @@ def _swap_points(
         net_prev_hpwls[n] = net_hpwls[n]
         delta_hpwl -= net_prev_hpwls[n]
 
-        new_h = _compute_net_hpwl(n, point_x, point_y, net_points_indices, net_points_offsets, net_weights)
+        new_h = _compute_net_hpwl(
+            n, point_x, point_y, net_points_indices, net_points_offsets, net_weights
+        )
         net_hpwls[n] = new_h
         delta_hpwl += new_h
 
-        if n >= n_external_nets: # if n is internal
+        if n >= n_external_nets:  # if n is internal
             delta_hpwl_internal += new_h - net_prev_hpwls[n]
 
     return delta_hpwl, delta_hpwl_internal
+
 
 @njit(cache=True)
 def _undo_swap(
@@ -606,19 +650,19 @@ def _undo_swap(
     point_nets_indices: np.ndarray,
     point_nets_offsets: np.ndarray,
     net_hpwls: np.ndarray,
-    net_prev_hpwls: np.ndarray
+    net_prev_hpwls: np.ndarray,
 ) -> None:
     """Undo the swap of 2 points"""
-    
+
     # swap coordinates
     point_x[idx1], point_x[idx2] = point_x[idx2], point_x[idx1]
     point_y[idx1], point_y[idx2] = point_y[idx2], point_y[idx1]
-    
+
     # Find affected nets
-    s1, e1 = point_nets_offsets[idx1], point_nets_offsets[idx1+1]
+    s1, e1 = point_nets_offsets[idx1], point_nets_offsets[idx1 + 1]
     nets1 = point_nets_indices[s1:e1]
 
-    s2, e2 = point_nets_offsets[idx2], point_nets_offsets[idx2+1]
+    s2, e2 = point_nets_offsets[idx2], point_nets_offsets[idx2 + 1]
     nets2 = point_nets_indices[s2:e2]
 
     affected_nets = _merge_remove_common(nets1, nets2)
