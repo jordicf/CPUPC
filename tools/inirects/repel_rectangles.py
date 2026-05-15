@@ -1,8 +1,10 @@
 import numpy as np
+from numpy.typing import NDArray
+from numpy import float64, int32
 
-def _new_centers_of_mass(centers: np.ndarray, heights: np.ndarray,
-                         widths: np.ndarray, fixed: set[int] = {}, 
-                         tick_threshold: float = 0.001) -> list[tuple[float, float]]:
+def _new_centers_of_mass(centers: NDArray, heights: NDArray,
+                         widths: NDArray, fixed: set[int] = set[int](), 
+                         tick_threshold: float = 0.001) -> NDArray:
     """
     Calculates the center of mass of all rectangles. 
     
@@ -16,27 +18,27 @@ def _new_centers_of_mass(centers: np.ndarray, heights: np.ndarray,
                         between consecutive ticks in Hanan grid
 
     Returns:
-        list[tuple[float, float]]: (x,y) coordinates of the center of mass
+        array[[float, float]]: (x,y) coordinates of the new centers of mass
     """
 
     N: int = len(centers)
 
     # center x and y values
-    cx: np.ndarray = centers[:, 0]
-    cy: np.ndarray = centers[:, 1]
+    cx: NDArray[float64] = centers[:, 0]
+    cy: NDArray[float64] = centers[:, 1]
 
     # rectangle edge coordinates
-    x_start: np.ndarray = cx - widths / 2
-    x_end:   np.ndarray = cx + widths / 2
-    y_start: np.ndarray = cy - heights / 2
-    y_end:   np.ndarray = cy + heights / 2
+    x_start: NDArray[float64] = cx - widths / 2
+    x_end:   NDArray[float64] = cx + widths / 2
+    y_start: NDArray[float64] = cy - heights / 2
+    y_end:   NDArray[float64] = cy + heights / 2
 
     # build ticks
-    x_ticks: np.ndarray = np.unique(np.concatenate([x_start, x_end])) 
-    y_ticks: np.ndarray = np.unique(np.concatenate([y_start, y_end]))
+    x_ticks: NDArray[float64] = np.unique(np.concatenate([x_start, x_end])) 
+    y_ticks: NDArray[float64] = np.unique(np.concatenate([y_start, y_end]))
 
     # merge ticks that are too close (trade accuracy for speed)
-    def merge_ticks(ticks: np.ndarray, threshold: float) -> np.ndarray:
+    def merge_ticks(ticks: NDArray[float64], threshold: float) -> NDArray:
         if len(ticks) == 0:
             return ticks
         total_range = ticks[-1] - ticks[0]
@@ -65,21 +67,21 @@ def _new_centers_of_mass(centers: np.ndarray, heights: np.ndarray,
     y_ticks = merge_ticks(y_ticks, tick_threshold)
 
     nx, ny = len(x_ticks), len(y_ticks)
-    hanan_grid = np.zeros((nx-1, ny-1), dtype=int)
+    hanan_grid: NDArray = np.zeros((nx-1, ny-1), dtype=int)
 
     # map rectangle coordinates to their closest tick
-    def closest_index(ticks: np.ndarray, value: float) -> int:
-        idx = np.searchsorted(ticks, value)
+    def closest_index(ticks: NDArray, value: float) -> int:
+        idx: int = int(np.searchsorted(ticks, value))
         if idx == 0:
             return 0
         if idx == len(ticks):
             return len(ticks) - 1
         return idx if abs(ticks[idx] - value) < abs(ticks[idx-1] - value) else idx-1
 
-    i_start = np.array([closest_index(x_ticks, xs) for xs in x_start])
-    i_end   = np.array([closest_index(x_ticks, xe) for xe in x_end])
-    j_start = np.array([closest_index(y_ticks, ys) for ys in y_start])
-    j_end   = np.array([closest_index(y_ticks, ye) for ye in y_end])
+    i_start: NDArray[int32] = np.array([closest_index(x_ticks, xs) for xs in x_start])
+    i_end:   NDArray[int32] = np.array([closest_index(x_ticks, xe) for xe in x_end])
+    j_start: NDArray[int32] = np.array([closest_index(y_ticks, ys) for ys in y_start])
+    j_end :  NDArray[int32] = np.array([closest_index(y_ticks, ye) for ye in y_end])
 
     # fill hanan grid
     for s, e, sj, ej in zip(i_start, i_end, j_start, j_end):
@@ -87,27 +89,27 @@ def _new_centers_of_mass(centers: np.ndarray, heights: np.ndarray,
             hanan_grid[s:e, sj:ej] += 1
 
     # calculate cell areas
-    dx: np.ndarray = np.diff(x_ticks)
-    dy: np.ndarray = np.diff(y_ticks)
-    area_grid: np.ndarray = np.outer(dx, dy)
+    dx: NDArray = np.diff(x_ticks)
+    dy: NDArray = np.diff(y_ticks)
+    area_grid: NDArray = np.outer(dx, dy)
 
     # cell centers
-    x_centers = (x_ticks[:-1] + x_ticks[1:]) / 2
-    y_centers = (y_ticks[:-1] + y_ticks[1:]) / 2
+    x_centers: NDArray[float64] = (x_ticks[:-1] + x_ticks[1:]) / 2
+    y_centers: NDArray[float64] = (y_ticks[:-1] + y_ticks[1:]) / 2
     xx, yy = np.meshgrid(x_centers, y_centers, indexing='ij')
 
     # density and mass grids
-    density_grid = np.zeros_like(hanan_grid, dtype=float)
-    mask = hanan_grid > 0
+    density_grid: NDArray = np.zeros_like(hanan_grid, dtype=float)
+    mask: NDArray = hanan_grid > 0
     density_grid[mask] = 1.0 / hanan_grid[mask]
-    mass_grid = density_grid * area_grid
+    mass_grid: NDArray = density_grid * area_grid
 
     # prefix sums
-    prefix_mass   = mass_grid.cumsum(axis=0).cumsum(axis=1)
-    prefix_mass_x = (mass_grid * xx).cumsum(axis=0).cumsum(axis=1)
-    prefix_mass_y = (mass_grid * yy).cumsum(axis=0).cumsum(axis=1)
+    prefix_mass: NDArray = mass_grid.cumsum(axis=0).cumsum(axis=1)
+    prefix_mass_x: NDArray = (mass_grid * xx).cumsum(axis=0).cumsum(axis=1)
+    prefix_mass_y: NDArray = (mass_grid * yy).cumsum(axis=0).cumsum(axis=1)
 
-    def rect_sum(cum_grid: np.ndarray, i0, i1, j0, j1):
+    def rect_sum(cum_grid: NDArray, i0: int, i1: int, j0: int, j1: int) -> float:
         res: float = cum_grid[i1-1, j1-1]
         if i0 > 0: res -= cum_grid[i0-1, j1-1]
         if j0 > 0: res -= cum_grid[i1-1, j0-1]
@@ -115,7 +117,7 @@ def _new_centers_of_mass(centers: np.ndarray, heights: np.ndarray,
         return res
 
     # compute centers of mass
-    cm_list = centers.copy()
+    cm_list: NDArray = centers.copy()
 
     for r in range(N):
         if r in fixed:
@@ -128,9 +130,9 @@ def _new_centers_of_mass(centers: np.ndarray, heights: np.ndarray,
             cm_list[r] = centers[r]  # fall back to previous center
             continue
 
-        m  = rect_sum(prefix_mass,   i0, i1, j0, j1)
-        mx = rect_sum(prefix_mass_x, i0, i1, j0, j1)
-        my = rect_sum(prefix_mass_y, i0, i1, j0, j1)
+        m:  float = rect_sum(prefix_mass,   i0, i1, j0, j1)
+        mx: float = rect_sum(prefix_mass_x, i0, i1, j0, j1)
+        my: float = rect_sum(prefix_mass_y, i0, i1, j0, j1)
 
         assert m > 0
 
@@ -139,23 +141,22 @@ def _new_centers_of_mass(centers: np.ndarray, heights: np.ndarray,
     return cm_list
 
 def repel_rectangles(
-        centers: np.ndarray, heights: np.ndarray, 
-        widths: np.ndarray, H: float, W: float, 
-        fixed: set[int] = {}, hyperparams: dict = {}, 
-    ) -> None:
+        centers: NDArray, heights: NDArray[float64], 
+        widths: NDArray[float64], H: float, W: float, 
+        fixed: set[int] = set[int](), hyperparams: dict = {}, 
+    ) -> NDArray:
     
     hyperparams = hyperparams.get('repel_rectangles', {})
     
     epsilon: float = hyperparams.get('epsilon', 1e-2)
-    threshold: np.ndarray = np.column_stack((widths, heights)) * epsilon
+    threshold: NDArray = np.column_stack((widths, heights)) * epsilon
     
     resolution: float = hyperparams.get('resolution', 1e-3) # minimum relative distance between hanan grid ticks
     
     while True:
         prev_centers = centers
 
-        centers: np.ndarray = \
-            _new_centers_of_mass(centers, heights, widths, fixed, tick_threshold=resolution)
+        centers = _new_centers_of_mass(centers, heights, widths, fixed, tick_threshold=resolution)
         
         # legalise
         centers[:,0] = np.maximum(widths/2, np.minimum(W - widths/2, centers[:,0]))
