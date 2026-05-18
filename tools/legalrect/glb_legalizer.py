@@ -495,10 +495,10 @@ class CasadiLegalizer:
             if self.module_kinds[i] != "soft":
                 continue
             for rect_idx in range(m.c):
-                g.append(m.h[rect_idx] - ar_max_i * m.w[rect_idx])
+                g.append(m.w[rect_idx] - ar_max_i * m.h[rect_idx])
                 lbg.append(float("-inf"))
                 ubg.append(0.0)
-                g.append(ar_min_i * m.w[rect_idx] - m.h[rect_idx])
+                g.append(ar_min_i * m.h[rect_idx] - m.w[rect_idx])
                 lbg.append(float("-inf"))
                 ubg.append(0.0)
 
