@@ -55,11 +55,11 @@ def parse_options(
         help="Min aspect ratio (w/h lower bound)",
     )
     parser.add_argument("--max_ratio", type=float, default=3.0, help="Max aspect ratio")
-    parser.add_argument("--num_iter", type=int, default=15, help="Number of iterations")
+    parser.add_argument("--num_iter", type=int, default=50, help="Number of iterations")
     parser.add_argument(
         "--radius",
         type=float,
-        default=1.0,
+        default=0.4,
         help="No-overlap distance radius multiplier",
     )
     parser.add_argument(
@@ -75,7 +75,7 @@ def parse_options(
         help="Initial tau for soft constraints",
     )
     parser.add_argument(
-        "--tau_decay", type=float, default=0.3, help="Tau decay factor per step"
+        "--tau_decay", type=float, default=0.7, help="Tau decay factor per step"
     )
     parser.add_argument("--otol_initial", type=float, default=1e-1)
     parser.add_argument("--otol_final", type=float, default=1e-4)
@@ -444,12 +444,12 @@ class CasadiLegalizer:
         self.has_decision_vars = len(self.vars) > 0
         self.x_sym = ca.vertcat(*self.vars) if self.vars else ca.SX.zeros(0, 1)
 
-        # 优化四：只保留 tau 这一个参数，其他的全通过 lbx/ubx / lbg 传进去
+        
         self.tau_param = ca.SX.sym("tau_param", 1)
         self.params = self.tau_param
 
         # ==============================================================
-        # 优化一：在 __init__ 中一次性构建所有约束和目标函数 (Static NLP)
+
         # ==============================================================
         g: list[ca.SX] = []
         lbg: list[float] = []
@@ -608,7 +608,7 @@ class CasadiLegalizer:
                     lbg.append(float("-inf"))
                     ubg.append(0.0)
 
-        # 4. Inter-module non-overlap: 静态添加所有模块对
+        # 4. Inter-module non-overlap: 
         def smax(a: ca.SX, b: ca.SX, tau: ca.SX) -> ca.SX:
             return 0.5 * (a + b + ca.sqrt((a - b) * (a - b) + 4 * tau * tau))
 
