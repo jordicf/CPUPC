@@ -311,8 +311,8 @@ class Strop:
 
         for br, d, _ in branches:
             new_b = br - prev_branches
-            if not new_b.empty:
-                strop_branches.add(RPoly2Box(new_b), d)
+            for r in new_b.maximal_rectangles():
+                strop_branches.add(RPoly2Box(r), d)
             prev_branches |= br
 
         return strop_branches

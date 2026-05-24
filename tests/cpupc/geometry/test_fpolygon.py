@@ -70,15 +70,34 @@ class TestFPolygon(unittest.TestCase):
 
     def test_strop_reduction(self) -> None:
         strop = self.strop.dup()
-        print(f"Initial strop: area={strop.area}, branches={strop.num_branches}, similarity={strop.similarity}")
         while strop.num_branches > 0:
             new_strop = strop.reduce()
-            print(f"Reduced strop: area={new_strop.area}, branches={new_strop.num_branches}, similarity={new_strop.similarity}")
             self.assertEqual(new_strop.reference, strop.reference)
             self.assertAlmostEqual(new_strop.area, strop.area, 7)
             self.assertTrue(new_strop.similarity <= strop.similarity + 0.02)
             self.assertEqual(new_strop.num_branches, strop.num_branches - 1)
             strop = new_strop
+
+
+class TestStrop(unittest.TestCase):
+    def setUp(self) -> None:
+        self.rectangles = [
+            # trunk
+            XY_Box(0, 5, 0, 3),
+            # branches (all north)
+            XY_Box(1, 2, 3, 5),
+            XY_Box(2, 3, 3, 4),
+            XY_Box(3, 4, 3, 5),
+            XY_Box(4, 5, 3, 4),
+        ]
+
+    def test_strop_creation(self) -> None:
+        strop1 = Strop(FPolygon(self.rectangles))
+        self.assertEqual(strop1.area, 21)
+        self.assertEqual(strop1.num_branches, 3)
+        strop2 = Strop(FPolygon(self.rectangles), trunk=self.rectangles[0])
+        self.assertEqual(strop2.area, 21)
+        self.assertEqual(strop2.num_branches, 4)
 
 
 class TestVertices(unittest.TestCase):
