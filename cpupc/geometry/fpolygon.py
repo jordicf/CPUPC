@@ -217,6 +217,9 @@ class XY_Box:
 
 def RPoly2Box(r: RPolygon) -> XY_Box:
     """Converts a rectangle in RPolygon format to XY_Box."""
+    assert len(list(r.rectangle_partitioning())) == 1, (
+        "The RPolygon must be a rectangle"
+    )
     x_interval = r.x_enclosure_interval
     xmin, xmax = x_interval.lower, x_interval.upper
     y_interval = r.y_enclosure_interval
@@ -336,10 +339,10 @@ class FPolygon:
             return self._vertices
 
         # Compute the vertices using the rectangle partitioning of the polygon.
-        # The rectangle partitioning of a simple polygon is a set of rectangles 
-        # that cover the polygon without overlapping. The vertices of the polygon 
+        # The rectangle partitioning of a simple polygon is a set of rectangles
+        # that cover the polygon without overlapping. The vertices of the polygon
         # are the endpoints of the edges of the rectangles in the partitioning.
-        # The edges of the rectangles are either vertical or horizontal, 
+        # The edges of the rectangles are either vertical or horizontal,
         # so we can easily determine the adjacent vertices by looking at the edges.
 
         boundary = self._polygon.boundary()
@@ -398,7 +401,7 @@ class FPolygon:
             current = new_vertex
 
         # Check that all points have been visited
-        self._is_simple =  len(self._vertices) == len(cont)
+        self._is_simple = len(self._vertices) == len(cont)
         if not self._is_simple:
             self._vertices = None
         return self._vertices
@@ -411,7 +414,9 @@ class FPolygon:
             return self._convex
 
         vertices = self.vertices
-        assert vertices is not None, "Convexity can only be computed for simple polygons"
+        assert vertices is not None, (
+            "Convexity can only be computed for simple polygons"
+        )
         n = len(vertices)
         self._convex = [False] * n
         for i in range(n):
