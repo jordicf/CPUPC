@@ -146,6 +146,13 @@ def forceatlas2_layout(
         return pos_arr
 
     # initial position
+    # Retrieve original coordinates of fixed vertices if they are not in pos (fallback)
+    for node in G:
+        if G.nodes[node].get('fixed', False) and node not in pos:
+            if G.nodes[node].get('center') is not None:
+                c = G.nodes[node]['center']
+                pos[node] = np.array([c.x, c.y])
+
     np.random.seed(seed)
     pos_arr = np.array([pos.get(node, np.random.rand(dim) * np.array([W, H])) for node in G]) # random positions for unassigned vertices
     nodes = list(G)

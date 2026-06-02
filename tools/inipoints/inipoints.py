@@ -51,7 +51,7 @@ def netlist_to_graph(netlist: Netlist) -> tuple[nx.Graph, dict[int, np.ndarray]]
             y_max = max(y_max, y + h / 2)
             y_min = min(y_min, y - h / 2)
 
-        assert x_max > x_min and y_max > y_min
+        assert x_max >= x_min and y_max >= y_min
         return (x_max - x_min, y_max - y_min)
 
     G = nx.Graph()
@@ -71,7 +71,15 @@ def netlist_to_graph(netlist: Netlist) -> tuple[nx.Graph, dict[int, np.ndarray]]
         if center:
             positions[id] = np.array([center.x, center.y])
 
-        G.add_node(id, name=name, area=area, height=height, width=width, fixed=fixed)
+        G.add_node(
+            id,
+            name=name,
+            area=area,
+            height=height,
+            width=width,
+            fixed=fixed,
+            center=center,
+        )
 
         id2name.append(name)
         name2id[name] = id
@@ -129,7 +137,7 @@ def graph_to_netlist(
         module_name: str = G.nodes[module_id]["name"]
         module: Module = netlist._name2module[module_name]
 
-        if module.is_fixed():
+        if module.is_fixed:
             continue
 
         # update the center of the module and the center of all its rectangles
@@ -143,7 +151,7 @@ def graph_to_netlist(
 
         # assign a square to modules with no shape
         # (this requires having a center, as well as an area)
-        if module.num_rectangles() == 0:
+        if module.num_rectangles == 0:
             module.create_square()
 
     return netlist
