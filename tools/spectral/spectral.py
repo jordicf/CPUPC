@@ -1,5 +1,5 @@
 # (c) Jordi Cortadella 2022
-# For the FRAME Project.
+# For the CPUPC Project.
 # Licensed under the MIT License
 # (see https://github.com/jordicf/FRAME/blob/master/LICENSE.txt).
 
@@ -16,10 +16,10 @@ from itertools import combinations
 import math
 from typing import Any
 
-from frame.die.die import Die
-from frame.geometry.geometry import Point, Shape
-from frame.netlist.netlist import Netlist
-from frame.utils.utils import Vector, Matrix
+from cpupc.die.die import Die
+from cpupc.geometry.geometry import Point, Shape
+from cpupc.netlist.netlist import Netlist
+from cpupc.utils.utils import Vector, Matrix
 from tools.spectral.spectral_types import AdjEdge, AdjList
 from tools.spectral.spectral_algorithm import spectral_layout_die
 

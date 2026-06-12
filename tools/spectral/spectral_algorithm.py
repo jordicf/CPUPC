@@ -10,7 +10,7 @@ modified to incorporate the mass of each node. The mass is interpreted as the mu
 
 import math
 import random
-from frame.utils.utils import Vector, Matrix
+from cpupc.utils.utils import Vector, Matrix
 from .spectral_types import AdjList
 
 
