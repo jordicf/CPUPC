@@ -32,6 +32,8 @@ def parse_options(
     parser.add_argument("--data", required=True, help="output file (data)")
     parser.add_argument("--label", required=True, help="output file (label)")
     parser.add_argument("--names", help="optional output file (names)")
+    parser.add_argument("--hyperedge", action="store_true", help="decompose hyperedges into 2-pin edges (clique model)")
+    parser.add_argument("--squares", action="store_true", help="create a square for each module that has no rectangles")
     return vars(parser.parse_args(args))
 
 
@@ -48,7 +50,10 @@ def main(prog: Optional[str] = None, args: Optional[list[str]] = None) -> None:
         names_type = file_type_from_suffix(options["names"])
         assert names_type != FileType.UNKNOWN, "Unknown suffix for names file"
 
-    data, label, names = write_netlist(Netlist(options["netlist"]))
+    net = Netlist(options["netlist"])
+    if options["squares"]:
+        net.create_squares()
+    data, label, names = write_netlist(net, hyperedge=options["hyperedge"])
 
     torch.save([data], options["data"])
     torch.save([label], options["label"])
