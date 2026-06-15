@@ -3,20 +3,62 @@
 # Licensed under the MIT License
 # (see https://github.com/jordicf/CPUPC/blob/master/LICENSE.txt).
 
+from itertools import combinations
+
 import torch
 from .fsconst import FsConstraint
 from .names import name2idx, FsNames, DictNames
-from cpupc.netlist.module import Boundary
+from cpupc.netlist.module import Boundary, Module
 from cpupc.netlist.netlist import Netlist
+from cpupc.netlist.netlist_types import HyperEdge
 from cpupc.geometry.fpolygon import Vertices
 
 
+def decompose_hyperedges(edges: list[HyperEdge]) -> list[HyperEdge]:
+    """
+    Decomposes hyperedges into 2-pin edges using the clique model. Every
+    hyperedge e of weight w(e) and p = |e| distinct modules contributes a
+    weight w(e) / C(p, 2) = 2 w(e) / (p (p - 1)) to each of its module
+    pairs.
+
+    Self-loops are dropped.
+    In every returned edge an IO pin is always the first module.
+    :param edges: hyperedges to decompose
+    :return: the 2-pin edges, one per distinct pair of modules
+    """
+    # Map an unordered pair of module names to (src, dst, accumulated weight),
+    # keeping the first-seen orientation (an IO pin is always the source).
+    pairs: dict[frozenset[str], tuple[Module, Module, float]] = {}
+    for edge in edges:
+        # Distinct modules of the hyperedge
+        members = list(dict.fromkeys(edge.modules))
+        p = len(members)
+        if p < 2:
+            continue  # self-loop: nothing to connect
+        weight = 2 * edge.weight / (p * (p - 1))  # w(e) / C(p, 2)
+
+        for src, dst in combinations(members, 2):
+            if dst.is_iopin:  # pins can only be the source of an edge
+                src, dst = dst, src
+            key = frozenset((src.name, dst.name))
+            if key in pairs:
+                s, d, w = pairs[key]
+                pairs[key] = (s, d, w + weight)
+            else:
+                pairs[key] = (src, dst, weight)
+
+    return [HyperEdge([src, dst], w) for src, dst, w in pairs.values()]
+
+
 def write_netlist(
-    net: Netlist,
+    net: Netlist, hyperedge: bool = False,
 ) -> tuple[list[torch.Tensor], tuple[torch.Tensor, list[torch.Tensor]], DictNames]:
     """
     Writes a netlist in the floorset format
+    The netlist may contain hyperedges, which are decomposed
+    into 2-pin edges following the clique model (see decompose_hyperedges).
     :param net: input netlist
+    :param hyperedge: enable hyperedge decomposition
     :return: data and label tensors and dictionary with list of names
     """
 
@@ -30,6 +72,12 @@ def write_netlist(
     # Calculate module centers
     net.calculate_centers_from_rectangles()
     assert all(m.center is not None for m in net.modules), "Some module has no center"
+
+    # Decompose the hyperedges into 2-pin edges.
+    if hyperedge:
+        edges = decompose_hyperedges(net.edges)
+    else:
+        edges = net.edges
 
     num_blocks = len(mod2idx)
     num_pins = len(pin2idx)
@@ -69,8 +117,10 @@ def write_netlist(
     t_p2b = torch.tensor([])
     hpwl_b2b, hpwl_p2b = 0.0, 0.0
     num_b2b, num_p2b = 0, 0
-    for edge in net.edges:
-        assert len(edge.modules) == 2
+    for edge in edges:
+        assert (
+            len(edge.modules) == 2
+        ), f"Hyperedge {edge} detected; enable hyperedge decomposition (--hyperedge)"
         src = edge.modules[0]
         dst = edge.modules[1]
         weight = edge.weight
@@ -100,7 +150,10 @@ def write_netlist(
         if m.is_iopin:
             continue
         i = mod2idx[m.name]
-        assert m.num_rectangles > 0, f"Module {m.name} has no rectangles"
+        assert m.num_rectangles > 0, (
+            f"Module {m.name} has no rectangles; if the netlist has no shapes, "
+            "they can be created with the --squares option"
+        )
         vertices = m.polygon().vertices
         assert vertices is not None, f"Module {m.name} has no vertices (not a simple polygon)"
         all_vertices.extend(vertices)
